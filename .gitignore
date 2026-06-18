@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Large regenerable data (rebuild via pipeline/fetch_nlcd.sh)
+data/nlcd_grid.tif
+
+# Test/server artifacts
+tests/auto/*.png
+tests/auto/server.log
+tests/auto/server.pid
+
+# OS / LaTeX build cruft
+.DS_Store
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+docs/*.aux
+docs/*.log
+docs/*.out

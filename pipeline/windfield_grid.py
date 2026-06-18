@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""Powell (PDE) windfield precompute over the Form S-6 grid.
+
+For each (category, input-vector) this:
+  1. Solves the Powell PDE windfield once (storm-relative; the field shape is
+     translation-invariant because the storm tracks due west at constant lat).
+  2. Steps the storm center hourly t=0..12 along (0,0)->(117,0).
+  3. Samples the gradient-level wind at all 840 grid vertices each hour.
+  4. Applies the Form S-6 CF gradient->surface conversion (3-zone radial rule).
+  5. Keeps the per-vertex peak (12-hr max) surface wind.
+
+Inputs : outputs/web/grid.json, outputs/web/inputs.json
+Output : outputs/web/powell.json   { unit, hours, cat1/cat3/cat5: [[840]*100] }
+
+Modeling notes:
+  - beta10 = 1.0 so the model returns gradient-level wind; the CF variable then
+    performs the gradient->surface conversion exactly as Form S-6 specifies.
+  - WSP (a quantile in [0,1]) -> Holland B via the default Uniform[1.0,2.5] map.
+    (Holland/Willoughby recompute live in JS; Powell uses this default.)
+"""
+import os, sys, json, time, math
+import torch
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+STORM_ANIM = os.path.expanduser("~/code/catmodel/wind/storm-anim")
+sys.path.insert(0, STORM_ANIM)
+import hurricane_pde_marine as H  # noqa: E402
+
+WEB = os.path.join(ROOT, "outputs", "web")
+GRID = os.path.join(WEB, "grid.json")
+INPUTS = os.path.join(WEB, "inputs.json")
+OUT = os.path.join(WEB, "powell.json")
+
+# constants
+MILE_M = 1609.344
+MS_TO_MPH = 2.2369362920544
+LAT0 = 25.8611          # landfall latitude; storm tracks due west at constant lat
+BEARING = 270.0         # due west
+# fine time sampling for the 12-hr peak envelope (hourly is too coarse vs the
+# storm's fast westward motion -> aliasing; dt=0.1h gives a smooth true peak)
+T_MAX, T_DT = 12.0, 0.1
+
+# default WSP-quantile -> Holland B (Uniform[1.0, 2.5])
+B_MIN, B_MAX = 1.0, 2.5
+
+# Kaplan & DeMaria (1995) inland decay + gentle Gulf recovery
+KD_ALPHA = 0.095        # land decay rate (1/hr)
+KD_R = 0.90             # one-time coastal reduction at first landfall
+KD_VB_MPH = 30.7        # background wind (26.7 kt) the storm decays toward
+KD_ALPHA_REC = 0.05     # gulf recovery rate toward pre-landfall Vmax (1/hr)
+
+
+def wsp_to_B(p):
+    return B_MIN + float(p) * (B_MAX - B_MIN)
+
+
+def make_args(rec):
+    """Build the solver args namespace from a Form S-6 input record."""
+    import argparse
+    dp = float(rec["FFP"]) - float(rec["CP"])          # pressure deficit (mb)
+    rmax_km = float(rec["Rmax"]) * MILE_M / 1000.0      # statute miles -> km
+    return argparse.Namespace(
+        lat0=LAT0, lon0=-80.0, B=wsp_to_B(rec["WSP"]),
+        rmax_core_km=rmax_km, dp_hpa=dp,
+        beta10=1.0, h_bl=500.0,
+        speed_mph=float(rec["VT"]), bearing_deg=BEARING,
+        rmin_km=0.5, rmax_km=250.0, Nr=200, Nphi=360, stretch_gamma=2.5,
+        Kh_inner=100.0, Kh_outer=250.0, iter=800, cfl=0.5,
+        z0_img=None, z0_blur=0.0, z0_gain=1.0,
+    )
+
+
+def cf_effective(r_miles, rmax_miles, cf_base):
+    """Form S-6 conversion factor 3-zone radial rule (ROA pp.184-185)."""
+    rr = r_miles / rmax_miles
+    inner = cf_base * rr
+    mid = cf_base - (rr - 1.0) / 2.0 * 0.1     # (r-Rmax)/(2Rmax)*0.1
+    outer = cf_base - 0.1
+    return torch.where(rr < 1.0, inner, torch.where(rr < 3.0, mid, outer))
+
+
+def peak_winds(rec, ew, ns, hours_t, device):
+    """Return (840,) peak surface wind (mph) for one input vector."""
+    args = make_args(rec)
+    speed_ms, meta = H.pde_steady_marine(args, device=device)
+    r_src, phi_src = meta["r"], meta["phi"]
+    rmax_out = float(r_src[-1])
+    rmax_miles = float(rec["Rmax"])
+    cf_base = float(rec["CF"])
+    vt = float(rec["VT"])
+
+    # storm center E-W position each hour (miles); N-S = 0
+    ew_c = vt * hours_t                              # (H,)
+    dx = ew[:, None] - ew_c[None, :]                # (840,H) miles, +west of storm
+    y_north = ns[:, None].expand(-1, hours_t.numel())
+    x_east = -dx
+    r_miles = torch.sqrt(dx * dx + y_north * y_north)
+    r_m = r_miles * MILE_M
+    phi = torch.atan2(y_north, x_east) % (2 * math.pi)
+
+    grad = H.bilinear_polar(speed_ms, r_src, phi_src, r_m, phi)   # (840,H) m/s
+    grad = torch.where(r_m > rmax_out, torch.zeros_like(grad), grad)
+
+    cf = cf_effective(r_miles, rmax_miles, cf_base).clamp(min=0.0)
+    surf_mph = grad * cf * MS_TO_MPH
+    return surf_mph.max(dim=1).values            # (840,)
+
+
+def main():
+    device = H.device_select()
+    grid = json.load(open(GRID))
+    inputs = json.load(open(INPUTS))
+    pts = grid["points"]
+    ew = torch.tensor([p["ew"] for p in pts], dtype=torch.float32, device=device)
+    ns = torch.tensor([p["ns"] for p in pts], dtype=torch.float32, device=device)
+    hours_t = torch.arange(0.0, T_MAX + T_DT / 2, T_DT, dtype=torch.float32, device=device)
+
+    out = {"unit": "mph", "t_max": T_MAX, "t_dt": T_DT, "n_steps": int(hours_t.numel()),
+           "wsp_to_B": {"dist": "uniform", "min": B_MIN, "max": B_MAX},
+           "cat1": [], "cat3": [], "cat5": []}
+
+    t_start = time.time()
+    total = sum(len(inputs[c]) for c in ("cat1", "cat3", "cat5"))
+    done = 0
+    for cat in ("cat1", "cat3", "cat5"):
+        for rec in inputs[cat]:
+            pw = peak_winds(rec, ew, ns, hours_t, device)
+            out[cat].append([round(float(v), 1) for v in pw.tolist()])
+            done += 1
+            if done % 20 == 0 or done == total:
+                el = time.time() - t_start
+                print(f"  {done}/{total}  ({el:.1f}s, {el/done:.2f}s/solve, "
+                      f"ETA {el/done*(total-done):.0f}s)", flush=True)
+        mx = max(max(v) for v in out[cat])
+        print(f"{cat}: done, peak wind across all vectors = {mx:.1f} mph", flush=True)
+
+    json.dump(out, open(OUT, "w"))
+    sz = os.path.getsize(OUT) / 1e6
+    print(f"Wrote {OUT} ({sz:.2f} MB) in {time.time()-t_start:.1f}s", flush=True)
+
+
+if __name__ == "__main__":
+    main()

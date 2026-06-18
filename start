@@ -1,0 +1,11 @@
+#!/bin/zsh
+# Serve the Form S-6 grid viewer on http://localhost:8012/web/
+# (fetch of the JSON data requires http://, not file://.)
+cd "$(dirname "$0")"
+PORT=8012
+echo "Serving FormS-6 viewer at http://localhost:${PORT}/web/index.html"
+echo "Stop with ./stop"
+./venv/bin/python -m http.server ${PORT} > tests/auto/server.log 2>&1 &
+echo $! > tests/auto/server.pid
+sleep 1
+echo "PID $(cat tests/auto/server.pid)"

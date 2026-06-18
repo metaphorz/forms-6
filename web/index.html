@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Form S-6 — Southern Florida Grid &amp; Windfields</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="anonymous" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="sidebar">
+    <h1>Form S-6 Grid</h1>
+    <p class="sub">Southern Florida &middot; 21&times;40 &middot; 840 vertices</p>
+
+    <section>
+      <h2>Theme</h2>
+      <select id="theme">
+        <option value="dark" selected>Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </section>
+
+    <section>
+      <h2>Windfield model</h2>
+      <select id="model">
+        <option value="powell">Powell (PDE)</option>
+        <option value="holland">Holland</option>
+        <option value="willoughby">Willoughby</option>
+        <option value="era5" disabled>ERA5 (coming soon)</option>
+      </select>
+    </section>
+
+    <section>
+      <h2>Hurricane category</h2>
+      <select id="category">
+        <option value="1">Category 1</option>
+        <option value="3">Category 3</option>
+        <option value="5">Category 5</option>
+      </select>
+    </section>
+
+    <section>
+      <h2>Input vector</h2>
+      <input id="vector" type="range" min="1" max="100" value="1" />
+      <span id="vectorLabel">1</span> / 100
+    </section>
+
+    <section>
+      <h2>Shape parameter B (from WSP quantile)</h2>
+      <label>Distribution
+        <select id="bdist">
+          <option value="uniform" selected>Uniform</option>
+          <option value="triangular">Triangular</option>
+          <option value="normal">Normal</option>
+        </select>
+      </label>
+      <div id="bparams"></div>
+    </section>
+
+    <section>
+      <h2>Surface</h2>
+      <label><input type="checkbox" id="roughness" checked /> Surface roughness (terrain)</label>
+    </section>
+
+    <section>
+      <h2>Display</h2>
+      <select id="display">
+        <option value="points" selected>Grid points</option>
+        <option value="contour">Filled contour</option>
+      </select>
+    </section>
+
+    <section>
+      <h2>Color grid by</h2>
+      <select id="colorBy">
+        <option value="wind" selected>Max wind speed (mph)</option>
+        <option value="landwater">Land / Water</option>
+      </select>
+      <div id="legend"></div>
+    </section>
+
+    <section>
+      <h2>Analysis (Form S-6)</h2>
+      <button id="btnSRC" class="analysis-btn">Sensitivity (SRC)</button>
+      <button id="btnEPR" class="analysis-btn">Uncertainty (EPR)</button>
+    </section>
+
+    <section id="layers">
+      <h2>Layers</h2>
+      <label><input type="checkbox" id="showGrid" checked /> Grid points</label>
+      <label><input type="checkbox" id="showWater" checked /> Water points</label>
+      <label><input type="checkbox" id="showTrack" checked /> Storm track</label>
+    </section>
+
+    <section id="status">
+      <h2>Status</h2>
+      <div id="info">Loading grid…</div>
+    </section>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin="anonymous"></script>
+  <script src="vendor/d3-array.min.js"></script>
+  <script src="vendor/d3-contour.min.js"></script>
+  <script src="windfield.js"></script>
+  <script src="contour.js"></script>
+  <script src="analysis.js"></script>
+  <script src="viewer.js"></script>
+</body>
+</html>
