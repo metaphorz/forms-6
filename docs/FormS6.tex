@@ -129,7 +129,7 @@ The output metric is the \textbf{mean peak wind over the 682 land vertices} (a
 wind proxy; the loss-cost output of the full Form S-6 is future work). The
 computed SRCs reproduce the ROA's qualitative findings: WSP dominates for
 Category~1 while Rmax grows to dominate for Category~5, with CP negative and CF,
-FFP, Rmax positive (Fig.~\ref{fig:analysis}).
+FFP, Rmax positive (Figure~\ref{fig:analysis}).
 
 \begin{figure}[H]
 \centering
@@ -144,7 +144,7 @@ Figs.~9--10. The windows are independently movable and resizable.}
 \section{Interface and reproducibility}
 The viewer offers model / category / input-vector selection, the WSP$\to B$
 distribution control, a surface-roughness toggle, a points/filled-contour display
-toggle, light and dark themes (Fig.~\ref{fig:light}), nearest-point hover (peak
+toggle, light and dark themes (Figure~\ref{fig:light}), nearest-point hover (peak
 wind, coordinates, land/water, place name, and the active input parameters), and
 the floating Sensitivity/Uncertainty windows.
 
@@ -161,5 +161,42 @@ All data artifacts are reproducible via \texttt{pipeline/build\_all.sh}
 \texttt{./start} at \url{http://localhost:8012/web/index.html}. Figures in this
 report are captured by \texttt{docs/capture\_figures.py} (Selenium driving headless
 Chrome against the running viewer).
+
+\begin{thebibliography}{9}
+\bibitem{fchlpm} Florida Commission on Hurricane Loss Projection Methodology (2025).
+\emph{Report of Activities}. Standard S-3 and Form S-6.
+
+\bibitem{iman} Iman, R.~L., Johnson, M.~E., and Schroeder, T.~A. (2001).
+\emph{Professional Team Demonstration Uncertainty/Sensitivity Analysis}.
+\url{https://fchlpm.sbafla.com/media/tepang2l/ua-sa-demo.pdf}
+
+\bibitem{holland} Holland, G.~J. (1980). An analytic model of the wind and pressure
+profiles in hurricanes. \emph{Monthly Weather Review}, 108, 1212--1218.
+
+\bibitem{willoughby} Willoughby, H.~E., Darling, R.~W.~R., and Rahn, M.~E. (2006).
+Parametric representation of the primary hurricane vortex. Part~II: A new family of
+sectionally continuous profiles. \emph{Monthly Weather Review}, 134, 1102--1120.
+
+\bibitem{powell} Powell, M.~D., Houston, S.~H., and Reinhold, T.~A. (1996).
+Hurricane Andrew's landfall in South Florida. Part~I: Standardizing the surface
+wind observations. \emph{Weather and Forecasting}, 11, 304--328.
+
+\bibitem{vickery} Vickery, P.~J., Wadhera, D., Powell, M.~D., and Chen, Y. (2009).
+A hurricane boundary layer and wind field model for use in engineering applications.
+\emph{Journal of Applied Meteorology and Climatology}, 48, 381--405.
+
+\bibitem{kaplan} Kaplan, J., and DeMaria, M. (1995). A simple empirical model for
+predicting the decay of tropical cyclone winds after landfall.
+\emph{Journal of Applied Meteorology}, 34, 2499--2512.
+
+\bibitem{esdu} ESDU (1985). \emph{Characteristics of atmospheric turbulence near the
+ground. Part~II: Single point data for strong winds (neutral atmosphere)}. ESDU 85020.
+
+\bibitem{nlcd} Multi-Resolution Land Characteristics Consortium (2023).
+\emph{NLCD 2021 Land Cover (CONUS)}. \url{https://www.mrlc.gov}.
+
+\bibitem{aersurface} U.S. Environmental Protection Agency.
+\emph{AERSURFACE User's Guide}, land-cover to surface-roughness ($z_0$) tables.
+\end{thebibliography}
 
 \end{document}
