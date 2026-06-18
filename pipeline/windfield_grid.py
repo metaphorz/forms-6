@@ -31,6 +31,8 @@ WEB = os.path.join(ROOT, "outputs", "web")
 GRID = os.path.join(WEB, "grid.json")
 INPUTS = os.path.join(WEB, "inputs.json")
 OUT = os.path.join(WEB, "powell.json")
+OUT_KD = os.path.join(WEB, "powell_kd.json")
+OUT_FIELD = os.path.join(WEB, "powell_field.json")
 
 # constants
 MILE_M = 1609.344
@@ -107,6 +109,91 @@ def peak_winds(rec, ew, ns, hours_t, device):
     return surf_mph.max(dim=1).values            # (840,)
 
 
+# ---- Kaplan-DeMaria intensity schedule + storm-relative field (post-UA run) --
+FIELD_HALF_KM, FIELD_N = 90.0, 81
+
+
+def build_track_land(grid):
+    """Return is_land(ewc_miles) using the N-S=0 grid row (nearest column)."""
+    row = sorted([(p["ew"], p["land"]) for p in grid["points"] if p["ns"] == 0])
+    ews = [e for e, _ in row]
+    lands = [bool(l) for _, l in row]
+    lo, hi = ews[0], ews[-1]
+
+    def is_land(ewc):
+        if ewc < lo or ewc > hi:
+            return False
+        best, bd = 0, 1e9
+        for i, e in enumerate(ews):
+            d = abs(e - ewc)
+            if d < bd:
+                bd = d; best = i
+        return lands[best]
+    return is_land
+
+
+def intensity_schedule(V0, vt, hours_t, is_land):
+    """s(t)=V(t)/V0: K&D inland decay + gentle Gulf recovery. Returns (nt,) list."""
+    s, V, made = [], V0, False
+    for t in hours_t.tolist():
+        if is_land(vt * t):
+            if not made:
+                V *= KD_R; made = True
+            V = KD_VB_MPH + (V - KD_VB_MPH) * math.exp(-KD_ALPHA * T_DT)
+        elif made:
+            V = V0 - (V0 - V) * math.exp(-KD_ALPHA_REC * T_DT)
+        s.append(V / V0)
+    return s
+
+
+def storm_field(speed_ms, meta, rmax_miles, cf_base, device):
+    """Cartesian storm-relative surface field (mph), FIELD_N x FIELD_N over +/-halfKm.
+    Flattened row-major (row->y north, col->x east) to match web/popup.js."""
+    r_src, phi_src = meta["r"], meta["phi"]
+    rmax_out = float(r_src[-1])
+    step = 2 * FIELD_HALF_KM / (FIELD_N - 1)
+    coords = torch.arange(FIELD_N, device=device, dtype=torch.float32) * step - FIELD_HALF_KM
+    X = coords[None, :].expand(FIELD_N, FIELD_N)   # col -> x east (km)
+    Y = coords[:, None].expand(FIELD_N, FIELD_N)   # row -> y north (km)
+    r_km = torch.sqrt(X * X + Y * Y)
+    r_m = r_km * 1000.0
+    phi = torch.atan2(Y, X) % (2 * math.pi)
+    grad = H.bilinear_polar(speed_ms, r_src, phi_src, r_m, phi)
+    grad = torch.where(r_m > rmax_out, torch.zeros_like(grad), grad)
+    r_miles = r_km * 1000.0 / MILE_M
+    cf = cf_effective(r_miles, rmax_miles, cf_base).clamp(min=0.0)
+    field = (grad * cf * MS_TO_MPH).reshape(-1)
+    return [int(round(float(v))) for v in field.tolist()]
+
+
+def solve_all(rec, ew, ns, hours_t, device, is_land):
+    """One PDE solve -> (marine_peak[840], kd_peak[840], field[FIELD_N^2])."""
+    args = make_args(rec)
+    speed_ms, meta = H.pde_steady_marine(args, device=device)
+    r_src, phi_src = meta["r"], meta["phi"]
+    rmax_out = float(r_src[-1])
+    rmax_miles = float(rec["Rmax"]); cf_base = float(rec["CF"]); vt = float(rec["VT"])
+
+    ew_c = vt * hours_t
+    dx = ew[:, None] - ew_c[None, :]
+    y_north = ns[:, None].expand(-1, hours_t.numel())
+    r_miles = torch.sqrt(dx * dx + y_north * y_north)
+    r_m = r_miles * MILE_M
+    phi = torch.atan2(y_north, -dx) % (2 * math.pi)
+    grad = H.bilinear_polar(speed_ms, r_src, phi_src, r_m, phi)
+    grad = torch.where(r_m > rmax_out, torch.zeros_like(grad), grad)
+    cf = cf_effective(r_miles, rmax_miles, cf_base).clamp(min=0.0)
+    surf = grad * cf * MS_TO_MPH                       # (840, nt) marine
+
+    marine = surf.max(dim=1).values
+    V0 = float(surf.max())
+    s = torch.tensor(intensity_schedule(V0, vt, hours_t, is_land),
+                     dtype=torch.float32, device=device)
+    kd = (surf * s[None, :]).max(dim=1).values
+    field = storm_field(speed_ms, meta, rmax_miles, cf_base, device)
+    return marine, kd, field
+
+
 def main():
     device = H.device_select()
     grid = json.load(open(GRID))
@@ -116,28 +203,37 @@ def main():
     ns = torch.tensor([p["ns"] for p in pts], dtype=torch.float32, device=device)
     hours_t = torch.arange(0.0, T_MAX + T_DT / 2, T_DT, dtype=torch.float32, device=device)
 
-    out = {"unit": "mph", "t_max": T_MAX, "t_dt": T_DT, "n_steps": int(hours_t.numel()),
-           "wsp_to_B": {"dist": "uniform", "min": B_MIN, "max": B_MAX},
-           "cat1": [], "cat3": [], "cat5": []}
+    is_land = build_track_land(grid)
+    base = {"unit": "mph", "cat1": [], "cat3": [], "cat5": []}
+    import copy
+    out = {**copy.deepcopy(base), "t_max": T_MAX, "t_dt": T_DT,
+           "n_steps": int(hours_t.numel()),
+           "wsp_to_B": {"dist": "uniform", "min": B_MIN, "max": B_MAX}}
+    out_kd = {**copy.deepcopy(base), "note": "Kaplan-DeMaria inland decay + Gulf recovery"}
+    out_fld = {**copy.deepcopy(base), "n": FIELD_N, "halfKm": FIELD_HALF_KM,
+               "note": "storm-relative marine surface wind (mph)"}
 
     t_start = time.time()
     total = sum(len(inputs[c]) for c in ("cat1", "cat3", "cat5"))
     done = 0
     for cat in ("cat1", "cat3", "cat5"):
         for rec in inputs[cat]:
-            pw = peak_winds(rec, ew, ns, hours_t, device)
-            out[cat].append([round(float(v), 1) for v in pw.tolist()])
+            marine, kd, field = solve_all(rec, ew, ns, hours_t, device, is_land)
+            out[cat].append([round(float(v), 1) for v in marine.tolist()])
+            out_kd[cat].append([round(float(v), 1) for v in kd.tolist()])
+            out_fld[cat].append(field)
             done += 1
             if done % 20 == 0 or done == total:
                 el = time.time() - t_start
                 print(f"  {done}/{total}  ({el:.1f}s, {el/done:.2f}s/solve, "
                       f"ETA {el/done*(total-done):.0f}s)", flush=True)
-        mx = max(max(v) for v in out[cat])
-        print(f"{cat}: done, peak wind across all vectors = {mx:.1f} mph", flush=True)
+        print(f"{cat}: done, marine peak={max(max(v) for v in out[cat]):.1f} "
+              f"kd peak={max(max(v) for v in out_kd[cat]):.1f} mph", flush=True)
 
-    json.dump(out, open(OUT, "w"))
-    sz = os.path.getsize(OUT) / 1e6
-    print(f"Wrote {OUT} ({sz:.2f} MB) in {time.time()-t_start:.1f}s", flush=True)
+    for path, obj in ((OUT, out), (OUT_KD, out_kd), (OUT_FIELD, out_fld)):
+        json.dump(obj, open(path, "w"))
+        print(f"Wrote {path} ({os.path.getsize(path)/1e6:.2f} MB)", flush=True)
+    print(f"Total {time.time()-t_start:.1f}s", flush=True)
 
 
 if __name__ == "__main__":
