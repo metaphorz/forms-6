@@ -98,21 +98,37 @@ lattice with the wind-speed colour bands.}
 \label{fig:contours}
 \end{figure}
 
-\section{Surface roughness}
-Surface roughness (terrain) is applied as a per-vertex, wind-speed-independent
-multiplier on the final surface wind, toggleable in the interface. The roughness
-length $z_0$ at each vertex is sampled from \textbf{NLCD~2021 land cover} (fetched
-as a properly georeferenced GeoTIFF from the MRLC WCS) via a published
-land-cover$\to z_0$ table, and converted from marine to terrain exposure with the
-gradient-tied \textbf{log-law} (Vickery et al.\ 2009 / ESDU):
+\section{Land effect: roughness and decay}
+A single \emph{land-effect} selector offers three mutually exclusive treatments
+of the storm's interaction with the land: \textbf{None} (marine winds),
+\textbf{Surface roughness}, and \textbf{Kaplan--DeMaria decay}.
+
+\paragraph{Surface roughness.}
+Roughness is applied as a per-vertex, wind-speed-independent multiplier on the
+final surface wind. The roughness length $z_0$ at each vertex is sampled from
+\textbf{NLCD~2021 land cover} (fetched as a properly georeferenced GeoTIFF from
+the MRLC WCS) via a published land-cover$\to z_0$ table, then converted from
+marine to terrain exposure with the gradient-tied \textbf{log-law}
+(Vickery et al.\ 2009 / ESDU):
 \[
 \text{factor}=\frac{\ln(z_{\text{ref}}/z_{0,\text{land}})/\ln(z_g/z_{0,\text{land}})}
 {\ln(z_{\text{ref}}/z_{0,\text{marine}})/\ln(z_g/z_{0,\text{marine}})},
 \]
 with $z_{\text{ref}}=10$\,m and gradient height $z_g=500$\,m; water returns
 $\approx1$. The land-mean factor is $\approx0.67$ (urban $\sim0.50$, wetland
-$\sim0.70$). This replaced an earlier heuristic that relied on an
-un-georeferenced JPEG.
+$\sim0.70$). This is a \emph{spatial} terrain-friction effect.
+
+\paragraph{Kaplan--DeMaria decay.}
+Roughness alone cannot reproduce a storm weakening as it moves inland, which is
+a \emph{temporal} filling process. The Kaplan--DeMaria (1995) model is offered as
+a separate option: a one-time coastal reduction ($R=0.90$) at first landfall, then
+$V(t)=V_b+(R\,V_0-V_b)\,e^{-\alpha t}$ with $\alpha=0.095\,\text{h}^{-1}$ and
+background $V_b=30.7$\,mph over land, with a gentle recovery
+($\alpha_{\text{rec}}=0.05\,\text{h}^{-1}$) once the centre re-emerges over the
+Gulf. Landfall ($\approx$E-W~9) and Gulf exit ($\approx$E-W~99) are read from the
+$N$-$S=0$ track land mask. Figure~\ref{fig:kdloss}~(left) shows the resulting
+inland decay for a Category~5 storm. The two options are kept exclusive because
+$\alpha$ already lumps surface friction with loss of the ocean energy source.
 
 \section{Sensitivity and uncertainty analysis}
 Following Iman, Johnson, and Schroeder (2001), as the ROA cites:
@@ -122,14 +138,21 @@ regressing the standardized output on the six standardized inputs over the 100
 SA vectors, per category. Sign gives direction, magnitude gives influence
 (ROA Fig.~9).
 \item \textbf{Uncertainty (EPR).} Expected percentage reduction in output
-variance per input, $\text{EPR}_i=\text{SRC}_i^2\times100\%$ (variance share;
-valid for near-independent inputs, as the ROA design intends) (ROA Fig.~10).
+variance per input (ROA Fig.~10). For \emph{Powell} the EPR is the variance share
+\[
+\text{EPR}_i=\frac{\mathrm{Var}\!\left(Y\,\middle|\,\text{only }X_i\text{ varies}\right)}
+{\mathrm{Var}(Y_{\text{SA}})}\times100\%,
+\]
+computed faithfully from the six one-variable ROA ``UA for $X$'' worksheets
+(1{,}800 PDE solves); the analytic models use the
+$\text{EPR}_i=\text{SRC}_i^2$ approximation.
 \end{itemize}
-The output metric is the \textbf{mean peak wind over the 682 land vertices} (a
-wind proxy; the loss-cost output of the full Form S-6 is future work). The
-computed SRCs reproduce the ROA's qualitative findings: WSP dominates for
-Category~1 while Rmax grows to dominate for Category~5, with CP negative and CF,
-FFP, Rmax positive (Figure~\ref{fig:analysis}).
+The output metric is the \textbf{mean peak wind over the 682 land vertices}
+(loss-cost is the additional metric in Section~\ref{sec:loss}). The computed
+SRCs and faithful EPRs reproduce the ROA's findings: WSP dominates for
+Category~1 while Rmax grows to dominate for Category~5 (faithful EPR: Cat~1
+WSP~$\approx54\%$, Cat~5 Rmax~$\approx57\%$), with CP negative and CF, FFP, Rmax
+positive (Figure~\ref{fig:analysis}).
 
 \begin{figure}[H]
 \centering
@@ -141,26 +164,79 @@ Figs.~9--10. The windows are independently movable and resizable.}
 \label{fig:analysis}
 \end{figure}
 
-\section{Interface and reproducibility}
-The viewer offers model / category / input-vector selection, the WSP$\to B$
-distribution control, a surface-roughness toggle, a points/filled-contour display
-toggle, light and dark themes (Figure~\ref{fig:light}), nearest-point hover (peak
-wind, coordinates, land/water, place name, and the active input parameters), and
-the floating Sensitivity/Uncertainty windows.
+\section{Vulnerability and loss cost}\label{sec:loss}
+The ROA (p.~186) fixes a single insured structure at \emph{every} one of the 682
+land vertices: a \$100{,}000, zero-deductible, single-family, single-story,
+masonry, gable-roof, no-shutter home with truss anchors, shingles over 15\# felt,
+a $\tfrac12$\,in.\ plywood deck (8d nails at 6\,in.\ edge / 12\,in.\ field), built
+1995, roof age unknown. Because the structure is uniform, a \textbf{single
+vulnerability curve} applies at all points and only the wind varies.
+
+The curve is generated from our existing HAZUS/ARA wind-vulnerability tool
+(\texttt{wind\_\allowbreak vulnerability\_\allowbreak tool\_\allowbreak v5.html})
+driven headlessly to the structure
+above, yielding Mean Damage Ratio (MDR) versus the ASCE~7-98 3-second peak gust at
+10\,m (Exposure~C). The resulting masonry curve (Figure~\ref{fig:vuln}) is a smooth
+sigmoid: $\sim$0 below 50\,mph, 50\% near 100\,mph, and a plateau at MDR~$\approx
+0.60$ above $\sim$140\,mph---the masonry ceiling (walls survive; roof, openings,
+and contents bound the loss), in contrast to frame construction which approaches
+1.0.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{light_theme.png}
-\caption{Light theme, Powell Category~3 peak-wind points.}
-\label{fig:light}
+\includegraphics[width=0.7\textwidth]{vulnerability_curve.png}
+\caption{Form S-6 vulnerability curve (Mean Damage Ratio vs.\ peak 3-second gust)
+for the masonry, gable, no-shutter structure, generated from the HAZUS/ARA tool.}
+\label{fig:vuln}
 \end{figure}
 
+Per-vertex loss is $\text{loss}=\text{MDR}(\text{peak wind})\times\$100{,}000$;
+the expected loss as a percent of exposure is the total over the 682 land vertices
+divided by $\$68{,}200{,}000$ ($=682\times\$100{,}000$). The viewer colours the
+grid by MDR, reports total loss (\$M) and \% exposure, and the hover popup shows
+loss \% and dollars beside the peak wind. Figure~\ref{fig:kdloss} shows Category~5
+Kaplan--DeMaria-decayed wind (left) and the corresponding loss field (right).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.49\textwidth]{powell_cat5_kd.png}\hfill
+\includegraphics[width=0.49\textwidth]{powell_cat5_loss.png}
+\caption{Category~5, Powell: Kaplan--DeMaria-decayed peak wind (left) and the
+loss field as Mean Damage Ratio (right), both as filled contours.}
+\label{fig:kdloss}
+\end{figure}
+
+\section{Interface and reproducibility}
+The viewer offers model / category / input-vector selection (the input vector
+chooses one of the 100 randomized storms for the category), the WSP$\to B$
+distribution control, the three-way land-effect selector, a colour-by control
+(peak wind, loss MDR, or land/water), a points/filled-contour display toggle,
+light and dark themes (Figure~\ref{fig:light}), and nearest-point hover (peak
+wind, loss, coordinates, land/water, place name, and the active input
+parameters). \textbf{Left-clicking} a vertex opens a floating windfield popup
+(Figure~\ref{fig:popup}) with the storm-relative isotach field---the marked
+vertex at its peak time---and that vertex's wind time series over the 12-hour
+passage. The Sensitivity and Uncertainty results open as independent, movable,
+resizable windows.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.46\textwidth]{light_theme.png}\hfill
+\includegraphics[width=0.46\textwidth]{windfield_popup.png}
+\caption{Left: light theme, Powell Category~3 peak-wind points. Right: the
+left-click windfield popup---storm-relative isotachs with the clicked vertex
+marked at its peak time, plus the per-vertex wind time series.}
+\label{fig:light}
+\end{figure}
+\label{fig:popup}
+
 All data artifacts are reproducible via \texttt{pipeline/build\_all.sh}
-(\texttt{grid.json}, place names, NLCD fetch, \texttt{roughness.json},
-\texttt{inputs.json}, \texttt{powell.json}). The app is served with
-\texttt{./start} at \url{http://localhost:8012/web/index.html}. Figures in this
-report are captured by \texttt{docs/capture\_figures.py} (Selenium driving headless
-Chrome against the running viewer).
+(grid, place names, NLCD fetch, roughness, inputs, and the Powell
+marine/K\&D/field precomputes), with \texttt{build\_vulnerability.py} for the
+loss curve and \texttt{windfield\_ua.py} for the faithful Powell EPR. The app is
+served with \texttt{./start} at \url{http://localhost:8012/web/index.html}.
+Figures here are captured by \texttt{docs/capture\_figures.py} (Selenium driving
+headless Chrome against the running viewer).
 
 \begin{thebibliography}{9}
 \bibitem{fchlpm} Florida Commission on Hurricane Loss Projection Methodology (2025).

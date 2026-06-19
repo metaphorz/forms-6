@@ -26,14 +26,19 @@ URL = "http://localhost:8012/web/index.html"
 FIGURES = [
     ("grid_basemap",     {"model": "holland", "colorBy": "landwater", "display": "points"}, None),
     ("powell_cat5_pts",  {"model": "powell", "category": "5", "vector": 1,
-                          "colorBy": "wind", "display": "points", "roughness": True}, None),
+                          "colorBy": "wind", "display": "points", "landEffect": "roughness"}, None),
     ("powell_cat5_contour", {"model": "powell", "category": "5", "display": "contour"}, None),
     ("holland_cat3_contour", {"model": "holland", "category": "3", "display": "contour"}, None),
     ("willoughby_cat5_contour", {"model": "willoughby", "category": "5", "display": "contour"}, None),
+    ("powell_cat5_kd",   {"model": "powell", "category": "5", "landEffect": "kd",
+                          "colorBy": "wind", "display": "contour"}, None),
+    ("powell_cat5_loss", {"model": "powell", "category": "5", "landEffect": "roughness",
+                          "colorBy": "loss", "display": "contour"}, None),
     ("light_theme",      {"theme": "light", "model": "powell", "category": "3",
                           "display": "points", "colorBy": "wind"}, None),
     ("analysis_src",     {"model": "powell", "_btn": "btnSRC"}, ".analysis-panel"),
     ("analysis_epr",     {"model": "powell", "_btn": "btnEPR"}, ".analysis-panel"),
+    ("windfield_popup",  {"model": "holland", "category": "5", "_click": [30, 0]}, ".wf-panel"),
 ]
 
 JS_SET = """
@@ -47,12 +52,17 @@ el.dispatchEvent(new Event(el.type === 'range' ? 'input' : 'change'));
 
 def apply(driver, controls):
     for k, v in controls.items():
-        if k == "_btn":
+        if k in ("_btn", "_click"):
             continue
         driver.execute_script(JS_SET, k, str(v) if not isinstance(v, bool) else v)
         time.sleep(0.15)
     if "_btn" in controls:
         driver.execute_script(f"document.getElementById('{controls['_btn']}').click();")
+    if "_click" in controls:
+        ew, ns = controls["_click"]
+        driver.execute_script(
+            "const i=state.grid.points.findIndex(p=>p.land&&p.ns===arguments[1]&&p.ew===arguments[0]);"
+            "if(i>=0) openWindfieldPopup(i);", ew, ns)
 
 
 def main():
