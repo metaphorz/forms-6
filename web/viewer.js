@@ -201,6 +201,11 @@ function landMeanWind(wind) {
 }
 
 // ---- theme ---------------------------------------------------------------
+function trackCasingColor(mode) {
+  // halo under the red track line: white on the dark basemap, near-black on light
+  return mode === "light" ? "#1a1a1a" : "#ffffff";
+}
+
 function applyTheme(mode) {
   document.body.classList.toggle("theme-light", mode === "light");
   const style = mode === "light" ? "light_all" : "dark_all";
@@ -210,6 +215,7 @@ function applyTheme(mode) {
     { attribution: "&copy; OpenStreetMap &copy; CARTO", subdomains: "abcd", maxZoom: 19 }
   ).addTo(state.map);
   state.tiles.bringToBack();
+  if (state.layers.trackCasing) state.layers.trackCasing.setStyle({ color: trackCasingColor(mode) });
 }
 
 // ---- map -----------------------------------------------------------------
@@ -234,11 +240,15 @@ function buildMap() {
 
   const row0 = g.points.filter(p => p.ns === 0).sort((a, b) => a.ew - b.ew);
   const east = row0[0], west = row0[row0.length - 1];
-  const trackLine = L.polyline([[east.lat, east.lon], [west.lat, west.lon]], {
-    color: "#e53e3e", weight: 2, dashArray: "6 4",
-  });
+  const trackPath = [[east.lat, east.lon], [west.lat, west.lon]];
+  // theme-aware casing under a red dashed line -> readable over basemap and contour bands
+  const casingColor = trackCasingColor(document.getElementById("theme").value);
+  const trackCasing = L.polyline(trackPath, { color: casingColor, weight: 5, opacity: 0.85 });
+  const trackLine = L.polyline(trackPath, { color: "#e53e3e", weight: 2.5, dashArray: "6 4" });
   const t0Marker = L.marker([east.lat, east.lon]).bindPopup("Storm center at t=0 (0,0)");
-  state.layers.track = L.layerGroup([trackLine, t0Marker]).addTo(state.map);
+  state.layers.track = L.layerGroup([trackCasing, trackLine, t0Marker]).addTo(state.map);
+  state.layers.trackCasing = trackCasing;               // recolored on theme change
+  state.layers.trackLines = [trackCasing, trackLine];   // for bringToFront over contour
 
   state.layers.landfall = L.circleMarker([g.landfall.lat, g.landfall.lon], {
     radius: 6, color: "#f0abfc", fillColor: "#c026d3", fillOpacity: 0.9,
@@ -338,6 +348,11 @@ function updateField() {
       const thr = WIND_STOPS.map(s => s[0]).filter(t => t > 0);
       state.contour = buildContourLayer(g, wind, thr, windColor).addTo(state.map);
     }
+    // keep the storm track + landfall visible above the filled bands
+    if (state.layers.trackLines && state.map.hasLayer(state.layers.track)) {
+      state.layers.trackLines.forEach(l => l.bringToFront());
+    }
+    if (state.layers.landfall) state.layers.landfall.bringToFront();
   }
 
   let wmax = 0, wsum = 0, n = 0, lossTotal = 0;

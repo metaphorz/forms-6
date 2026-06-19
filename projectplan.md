@@ -3,15 +3,15 @@
 ## Goal
 An interactive Leaflet web app over southern Florida that draws the official Form S-6
 21×40 grid and runs selectable hurricane windfield models over it: **Powell** (PDE/slab),
-**Holland**, **Willoughby**, and a deferred **ERA5** 4th option. Supports the
-sensitivity/uncertainty analysis context of Standard S-3 / Form S-6 in the ROA.
+**Holland**, and **Willoughby**. (An ERA5 4th option was considered and retired —
+see Phase 4.) Supports the sensitivity/uncertainty analysis context of
+Standard S-3 / Form S-6 in the ROA.
 
 ## Confirmed decisions (2026-06-18)
 - **Scope:** Map + windfields first (phased). Loss-cost + SA/UA pipeline = later Phase 5.
-- **Compute:** Hybrid. Powell (PDE) + ERA5 precomputed in Python → JSON. Holland +
+- **Compute:** Hybrid. Powell (PDE) precomputed in Python → JSON. Holland +
   Willoughby computed live in the browser (analytic, instant interactivity).
-- **ERA5:** Deferred. Build models 1–3 solidly; design the UI with an ERA5 slot and
-  decide the data source later.
+- **ERA5:** Retired (2026-06-19). Originally planned as a 4th option; see Phase 4.
 
 ## Key facts (from ROA pp. 167–168, 182–191, 336–341 + Excel inputs)
 - **Grid:** 21×40 = 840 vertices, ~3 statute-mile spacing.
@@ -79,8 +79,24 @@ sensitivity/uncertainty analysis context of Standard S-3 / Form S-6 in the ROA.
 - [x] `pipeline/build_all.sh` — one-command reproducible rebuild (dependency order).
 - [ ] Hour slider / animate (t=0..12) — deferred (peak-wind is the agreed metric).
 
-### Phase 4 — ERA5 4th option (deferred)
-- [ ] UI slot present but inert; data source TBD with user.
+### Phase 4 — ERA5 4th option  ❌ RETIRED (2026-06-19)
+- [x] Removed the inert "ERA5 (coming soon)" dropdown entry.
+- **Rationale:** ERA5 is a *reanalysis* (fixed, already-observed field), not a
+  *parametric* model. It cannot be a peer to Powell/Holland/Willoughby:
+  - **Paradigm mismatch:** the 3 models are generated from tunable inputs
+    (CP, Rmax, VT, WSP, CF, FFP); ERA5 has no such knobs, so category {1,3,5},
+    input-vector 1–100, and the B-distribution controls would all be inert.
+  - **SA/UA undefined:** SRC/EPR require perturbing the 6 inputs; a single fixed
+    reanalysis field has nothing to vary.
+  - **Resolution:** ERA5 ~0.25° (~28 km) under-resolves the TC inner core and
+    systematically damps peak winds — the exact quantity (peak wind → loss) the
+    app reports — and yields only ~8–12 cells over the southern-FL domain vs. 840
+    grid vertices.
+- **If revisited later**, the only coherent roles are (A) a clearly-labeled,
+  per-historical-storm *validation overlay* (storm/date picker; coarse), or
+  (B) using ERA5's well-resolved large scales (CP, track, translation speed) to
+  *estimate* the input vector fed into the existing parametric models — a
+  separate feature, not a dropdown entry.
 
 ### Phase 4.5 — Sensitivity & Uncertainty Analysis  ✅ (v1)
 - [x] **SA → SRC**: standardized regression of output on the 6 inputs (CP, Rmax, VT,
@@ -119,7 +135,7 @@ sensitivity/uncertainty analysis context of Standard S-3 / Form S-6 in the ROA.
   (b) generate all figures when `docs/` is built later (as in other ~/code projects).
 
 ## Open questions for later
-- ERA5 4th-option data source and meaning (deferred).
+- (ERA5 4th-option resolved — retired; see Phase 4.)
 
 ## Review
 _(to be filled in as work proceeds)_
