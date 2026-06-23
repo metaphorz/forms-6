@@ -8,6 +8,7 @@ body { display: flex; }
   flex-shrink: 0;
 }
 #sidebar h1 { font-size: 19px; margin: 0 0 2px; }
+#sidebar .credit { margin: 0 0 2px; color: #c5d2de; font-size: 12px; font-weight: 600; }
 #sidebar .sub { margin: 0 0 14px; color: #9fb0c0; font-size: 12px; }
 #sidebar section { border-top: 1px solid #2c3947; padding: 12px 0; }
 #sidebar h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
@@ -30,6 +31,7 @@ body { display: flex; }
 /* ---- light theme ---- */
 body.theme-light #sidebar { background: #f1f4f8; color: #1c2530; }
 body.theme-light #sidebar .sub { color: #5a6b7c; }
+body.theme-light #sidebar .credit { color: #2a3744; }
 body.theme-light #sidebar section { border-top-color: #d4dce5; }
 body.theme-light #sidebar h2 { color: #5a6b7c; }
 body.theme-light #sidebar select,
