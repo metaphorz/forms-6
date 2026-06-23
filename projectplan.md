@@ -203,6 +203,21 @@ hybrid pattern: **train offline in Python → export JSON → the browser only
 evaluates** (identical to how Powell already works). The deployed site stays a
 zero-backend static page (GitHub Pages unaffected).
 
+### Training / execution model (decided 2026-06-23)
+Training runs **offline, in the dev/precompute step** (like Powell) — NOT on a
+button press. The UI only *evaluates* pre-fit models loaded from JSON (kernel
+dot-product for GPR, forward pass for the NN); instant, and the deployed site
+stays a zero-backend static page. A button that trained would need in-browser
+training (awkward) or a live server (breaks GitHub Pages) — rejected.
+
+**Config scope = Option A (chosen).** GPR/NN are precomputed for ONE canonical
+configuration per (category × response) — default model + land effect
+(Powell + roughness). Changing land-effect or B-distribution leaves GPR/NN
+fixed to that default (gray out / "default config" note); **Linear/RSM stays
+live for every config** as the always-available baseline. Option B (precompute
+the full model × land × response × category grid so GPR/NN track every toggle)
+is a later expansion if needed.
+
 ### Reality check (decide before building)
 With Powell the simulator is smooth + deterministic, so the linear/RSM metamodel
 already gives R²≈1.0. GPR/NN will NOT predict better — their value here is
@@ -235,9 +250,11 @@ for accuracy.
 - Interaction Profiler, %TLC CDF, Response toggle: unchanged, reused as-is.
 
 ### Build outline
-- [ ] `pipeline/`: Python script fits GPR + MLP per (category × response) over the
-      100 LHC vectors; writes `outputs/web/metamodels.json` (θ, weights, R²/CV,
-      Sobol indices). Mirrors the Powell precompute step; runnable via a shell script.
+- [ ] `pipeline/`: Python script fits GPR + MLP per (category × response) for the
+      default config only (Powell + roughness, Option A) over the 100 LHC vectors;
+      writes `outputs/web/metamodels.json` (θ, weights, R²/CV, Sobol indices).
+      Mirrors the Powell precompute step; runnable via a shell script.
+      (Linear/RSM is NOT precomputed — it stays live in the browser.)
 - [ ] `web/analysis.js`: JS predictors `gprPredict()` (kernel eval vs training pts)
       and `mlpPredict()` (forward pass); route `fitRSM`→ a metamodel dispatcher
       keyed by the new dropdown.
