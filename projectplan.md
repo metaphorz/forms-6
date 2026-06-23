@@ -158,5 +158,47 @@ Done:
 - [x] Selenium test `tests/auto/test_mean_csv_buttons.py` — Powell + Holland mean, toggle,
       slider-disable, and 300-row CSV download. **ALL CHECKS PASSED.**
 
+## Metamodel + Interaction Profiler — Phase A (2026-06-23) — DONE
+From the chris/ deck (Mark Johnson / "Other Chris", 6/5/26): upgrade SA from a
+first-order linear regression to an interactive **metamodel** with an **interaction
+profiler**, and allow the response Y to be either mean peak wind or loss cost %TLC.
+Phase A is pure JS (no new deps / no Python precompute); GPR + neural-net
+metamodels are Phase B.
+
+Confirmed with user:
+- Start with **Phase A** (pure JS).
+- Response Y is **user-toggleable**: mean peak wind (current) OR loss cost %TLC(i).
+
+Definitions:
+- %TLC(i) = TLC(i)/total_exposure, TLC(i)=Σ_land LC(i,x,y), LC=MDR(wind)·$100k,
+  total_exposure = 682·$100k = $68.2M  ⇒  %TLC(i) = 100·mean(MDR over 682 land pts).
+  (Needs state.vuln — loaded. Equivalent to the ROA definition.)
+- Second-order response-surface metamodel (lets the profiler bend / show interactions):
+  Ŷ = b0 + Σ bᵢxᵢ + Σ bᵢᵢxᵢ² + Σ_{i<j} bᵢⱼxᵢxⱼ   (standardized inputs; 28 terms, n=100).
+  Fit by least squares via the existing solve() on the normal equations XᵀX β = Xᵀy.
+
+Done:
+- [x] `index.html`: Response selector (Mean peak wind / Loss cost %TLC) + buttons
+      **Interaction Profiler** and **%TLC CDF** in the Analysis section.
+- [x] `analysis.js`: `responseVar()`, `pctTLC()`, `outputMetric()`; computeSRC routed
+      through outputMetric; getData cache key includes `resp`; faithful-EPR guarded to
+      wind response; SRC/EPR footnote is response-aware.
+- [x] `analysis.js`: `rsmFeatures` + `fitRSM` (standardized 2nd-order RSM, 28 terms,
+      ridge-stabilized normal equations via existing `solve`) + `rsmPredict`.
+- [x] `analysis.js`: **Interaction Profiler** panel (`drawProfiler`/`buildProfilerDOM`/
+      `updateProfilerPlots`) — 6 colour-coded partial-dependence subplots + 6 sliders;
+      slider drag redraws only the curves (sliders stay live); category-aware.
+- [x] `analysis.js`: **%TLC empirical CDF** panel (`drawCDF`) — sorted step plot, 100 vectors.
+- [x] `analysis.js`: panel dispatch (`renderPanel`) + `redrawOpenPanels`; category change
+      redraws prof/cdf only.
+- [x] `style.css`: `.prof-grid` / `.prof-cell` / `.prof-sliders` styles.
+- [x] Selenium test `tests/auto/test_profiler_cdf.py` — 6 subplots+sliders, moving CP
+      changed 5/6 curves (interactions visible), %TLC re-render, CDF renders. **PASSED.**
+      No regression: `test_mean_csv_buttons.py` still passes; SRC works for wind + %TLC.
+
+Phase B (later, not now): scikit-learn GPR (ARD lengthscales = sensitivity) + small MLP,
+precompute → JSON, Linear vs GPR vs NN comparison, variance-based total/interaction indices,
+optional grid-point-level SA map.
+
 ## Review
 _(to be filled in as work proceeds)_

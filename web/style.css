@@ -70,5 +70,15 @@ body.theme-light #legend .lg { color: #2a3744; }
 .legend2 .lgi { display: flex; align-items: center; font-size: 11px; color: #334155; }
 .legend2 .lgi span { width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; }
 
+/* interaction profiler panel */
+.prof-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.prof-cell { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; }
+.prof-sliders { display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 2px 12px; margin-top: 8px; }
+.prof-sl { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #334155; }
+.prof-sl span { width: 34px; font-weight: 600; }
+.prof-sl input[type="range"] { flex: 1; min-width: 0; }
+.prof-sl b { width: 52px; text-align: right; font-variant-numeric: tabular-nums; color: #1c2530; }
+
 .grid-pt-land { fill: #6b7785; }
 .grid-pt-water { fill: #2b6cb0; }

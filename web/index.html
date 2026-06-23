@@ -91,8 +91,16 @@
 
     <section>
       <h2>Analysis (Form S-6)</h2>
+      <label>Response (Y)
+        <select id="response">
+          <option value="wind" selected>Mean peak wind</option>
+          <option value="tlc">Loss cost %TLC</option>
+        </select>
+      </label>
       <button id="btnSRC" class="analysis-btn">Sensitivity (SRC)</button>
       <button id="btnEPR" class="analysis-btn">Uncertainty (EPR)</button>
+      <button id="btnProf" class="analysis-btn">Interaction Profiler</button>
+      <button id="btnCDF" class="analysis-btn">%TLC CDF</button>
     </section>
 
     <section id="layers">
