@@ -196,7 +196,32 @@ Done:
       changed 5/6 curves (interactions visible), %TLC re-render, CDF renders. **PASSED.**
       No regression: `test_mean_csv_buttons.py` still passes; SRC works for wind + %TLC.
 
-## Metamodels Phase B (machine-learning metamodels) — PLANNED, not started
+## Metamodels Phase B (machine-learning metamodels) — DONE (2026-06-23)
+Built and Selenium-tested. GPR + NN fit offline (scikit-learn) → metamodels.json;
+browser evaluates only. Defaults unchanged (Metamodel=Linear (RSM), Color-by=wind,
+Response=wind) — verified by the Phase A regression test still passing.
+
+Implemented:
+- `pipeline/fit_metamodels.py`: fits GPR (ARD) + MLP (tanh, 5-fold CV) per
+  category × response for the DEFAULT config (Powell+roughness, Option A); exports
+  θ/weights/scalers/R²/CV + Sobol S1/ST. In-process parity checks vs sklearn
+  predict: GPR max|Δ|=9e-10, MLP max|Δ|=0. Needs scikit-learn (added to venv).
+- `web/analysis.js`: `gprPredictRaw`/`mlpPredictRaw` evaluators; `buildMetamodel`
+  dispatcher; profiler now metamodel-driven; `Compare metamodels` panel (overlaid
+  Linear/GPR/NN + R²/CV table); EPR shows Sobol total-effect when GPR selected;
+  `computeGridSensitivity` (per-vertex dominant input).
+- `web/viewer.js`: loads metamodels.json; `Sensitivity (dominant input)` colour mode.
+- `index.html`/`style.css`: +1 Metamodel dropdown, +1 Compare button, +1 colour-by
+  option, compare-table styles.
+- Tests: `tests/auto/test_metamodels.py` (GPR/NN switch, compare 3-series+table,
+  Sobol EPR, grid sensitivity colours+legend) — PASSED. Phase A test still PASSES.
+- Figures added to `docs/capture_figures.py`: analysis_compare, grid_sensitivity.
+
+Note: all metamodels hit R²≈1 (smooth deterministic simulator) as predicted — the
+value is diagnostic (ARD ranking, Sobol indices, 3-way agreement), not accuracy.
+Sobol ST top variable: WSP (Cat 1/3) → Rmax (Cat 5), matching the ROA finding.
+
+### (historical) original Phase B plan
 Upgrade the metamodel backend from the second-order response surface to
 machine-learning metamodels, per the 6/5/26 deck. Preserves the app's existing
 hybrid pattern: **train offline in Python → export JSON → the browser only

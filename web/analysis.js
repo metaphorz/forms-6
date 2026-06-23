@@ -18,7 +18,7 @@ const VAR_COLORS = {
   WSP: "#111827", CF: "#ef4444", FFP: "#7c3aed",
 };
 const analysisState = { mode: null, cache: null };  // mode: 'src' | 'epr'
-const profilerState = { fit: null, ref: null };      // metamodel + reference point
+const profilerState = { mm: null, ref: null };       // metamodel + reference point
 
 // ---- linear algebra ------------------------------------------------------
 function mean(a) { return a.reduce((s, v) => s + v, 0) / a.length; }
@@ -91,6 +91,33 @@ function computeSRC(model) {
     result[cat] = { src, r2 };
   }
   return result;
+}
+
+// ---- grid-point-level sensitivity ----------------------------------------
+// Per land vertex, regress that vertex's wind (over the 100 vectors) on the six
+// standardized inputs and return the dominant input index (SA at the grid-point
+// level, not after averaging — the deck's recommendation). Water/unavailable = -1.
+function computeGridSensitivity(model, cat) {
+  const recs = state.inputs[cat], n = recs.length;
+  const fields = [];
+  for (let i = 0; i < n; i++) {
+    const w = computeWindFor(model, cat, i);
+    if (!w || typeof w === "string") return null;     // metric not ready
+    fields.push(w);
+  }
+  const cols = SA_VARS.map(v => recs.map(r => r[v]));
+  const R = cols.map(ci => cols.map(cj => corr(ci, cj)));  // input corr matrix (fixed)
+  const pts = state.grid.points, dom = new Int16Array(pts.length).fill(-1);
+  for (let p = 0; p < pts.length; p++) {
+    if (!pts[p].land) continue;
+    const y = fields.map(f => f[p]);
+    const r = cols.map(ci => corr(ci, y));
+    const beta = solve(R, r);                            // standardized regression coeffs
+    let bi = 0, bv = -1;
+    beta.forEach((b, k) => { const a = Math.abs(b); if (a > bv) { bv = a; bi = k; } });
+    dom[p] = bi;
+  }
+  return dom;
 }
 
 // ---- faithful EPR (Powell, Option 1): variance share from the UA sheets ---
@@ -174,6 +201,87 @@ function rsmPredict(fit, raw) {
   return rsmFeatures(z).reduce((s, fa, a) => s + fa * fit.beta[a], 0);
 }
 
+// ---- Phase B: evaluate precomputed GPR / NN metamodels (default config) ---
+// Training happens offline (pipeline/fit_metamodels.py -> metamodels.json);
+// the browser only evaluates. GPR/NN are fit for the DEFAULT config only
+// (Powell + roughness, "Option A"); Linear/RSM stays live for every config.
+const METAMODEL_LABEL = { rsm: "Linear (RSM)", gpr: "Gaussian process", mlp: "Neural net" };
+const METAMODEL_COLOR = { rsm: "#2563eb", gpr: "#059669", mlp: "#b45309" };
+
+function currentMetamodel() {
+  const el = document.getElementById("metamodel");
+  return el ? el.value : "rsm";       // 'rsm' | 'gpr' | 'mlp'
+}
+
+function mmEntry(response, cat) {
+  const mm = state.metamodels;
+  return (mm && mm.responses[response] && mm.responses[response][cat])
+    ? mm.responses[response][cat] : null;
+}
+
+function standardizeRaw(raw, scaler) {
+  return raw.map((v, i) => (v - scaler.mean[i]) / scaler.std[i]);
+}
+
+// GPR posterior mean from exported params (matches scikit-learn predict)
+function gprPredictRaw(entry, raw) {
+  const g = entry.gpr, z = standardizeRaw(raw, entry.scaler), ls = g.length_scale;
+  let acc = 0;
+  for (let t = 0; t < g.x_train.length; t++) {
+    const xt = g.x_train[t]; let d2 = 0;
+    for (let d = 0; d < z.length; d++) { const e = (z[d] - xt[d]) / ls[d]; d2 += e * e; }
+    acc += g.const * Math.exp(-0.5 * d2) * g.alpha[t];
+  }
+  return acc * g.y_std + g.y_mean;
+}
+
+// MLP forward pass (tanh hidden, identity output; standardized in + out)
+function mlpPredictRaw(entry, raw) {
+  const m = entry.mlp, W = m.weights, B = m.biases;
+  let a = standardizeRaw(raw, entry.scaler);
+  for (let l = 0; l < W.length; l++) {
+    const Wl = W[l], Bl = B[l], out = new Array(Wl[0].length).fill(0);
+    for (let o = 0; o < out.length; o++) {
+      let s = Bl[o];
+      for (let i = 0; i < a.length; i++) s += a[i] * Wl[i][o];
+      out[o] = (l < W.length - 1) ? Math.tanh(s) : s;
+    }
+    a = out;
+  }
+  return a[0] * m.y_std + m.y_mean;
+}
+
+// per-input observed stats (min/max/mean/sd) — config-independent axis ranges
+function inputStats(cat) {
+  const recs = state.inputs[cat];
+  return SA_VARS.map(v => {
+    const col = recs.map(r => r[v]);
+    return { v, m: mean(col), sd: Math.sqrt(variance(col)) || 1,
+             min: Math.min(...col), max: Math.max(...col) };
+  });
+}
+
+// unified metamodel object: { type, stats, predict(raw), r2, cv?, ymin, ymax, note }
+function buildMetamodel(model, cat, type) {
+  type = type || currentMetamodel();
+  if (type === "rsm") {
+    const fit = fitRSM(model, cat);
+    if (!fit) return null;
+    return { type, stats: fit.stats, predict: raw => rsmPredict(fit, raw),
+             r2: fit.r2, ymin: fit.ymin, ymax: fit.ymax, note: "" };
+  }
+  const entry = mmEntry(responseVar(), cat);
+  if (!entry) return null;                    // metamodels.json not loaded
+  const block = entry[type];
+  const land = document.getElementById("landEffect").value;
+  const isDefault = (model === "powell" && land === "roughness");
+  const predict = type === "gpr"
+    ? raw => gprPredictRaw(entry, raw) : raw => mlpPredictRaw(entry, raw);
+  return { type, stats: inputStats(cat), predict, r2: block.r2, cv: block.cv_r2,
+           ymin: entry.y_range[0], ymax: entry.y_range[1],
+           note: isDefault ? "" : " · default config (Powell+roughness)" };
+}
+
 function bringFront(el) { el.style.zIndex = ++zTop; }
 
 function makeDraggable(el, handle) {
@@ -223,7 +331,7 @@ function createPanel(mode) {
 function openPanel(mode) {
   if (!panels[mode]) {
     panels[mode] = createPanel(mode);
-    if (mode === "prof") {
+    if (mode === "prof" || mode === "cmp") {
       panels[mode].el.style.width = "580px";
       panels[mode].el.style.height = "540px";
     }
@@ -237,6 +345,7 @@ function openPanel(mode) {
 // dispatch a panel to its renderer
 function renderPanel(mode) {
   if (mode === "prof") return drawProfiler();
+  if (mode === "cmp") return drawCompare();
   if (mode === "cdf") return drawCDF();
   return drawChart(mode);
 }
@@ -259,6 +368,8 @@ function drawChart(mode) {
   const model = analysisState.cache.model;
   const epr = (isEPR && model === "powell" && responseVar() === "wind")
     ? faithfulEPR() : null;
+  // GPR variance-based (Sobol total-effect) EPR when the GPR metamodel is selected
+  const useSobol = isEPR && currentMetamodel() === "gpr" && state.metamodels;
 
   // values per var per cat
   const series = {};
@@ -266,7 +377,12 @@ function drawChart(mode) {
   for (const v of SA_VARS) {
     series[v] = cats.map(c => {
       const src = data["cat" + c].src[v];
-      const val = isEPR ? (epr ? epr["cat" + c][v] : src * src * 100) : src;
+      let val;
+      if (!isEPR) val = src;
+      else if (useSobol) {
+        const e = mmEntry(responseVar(), "cat" + c);
+        val = e ? e.sobol.ST[SA_VARS.indexOf(v)] * 100 : src * src * 100;
+      } else val = epr ? epr["cat" + c][v] : src * src * 100;
       vmin = Math.min(vmin, val); vmax = Math.max(vmax, val);
       return val;
     });
@@ -313,8 +429,9 @@ function drawChart(mode) {
     svg + `<div class="legend2">${legend}</div>` +
     `<p class="note">${analysisState.cache.model} · metric: ${metricTxt}` +
     ` · land effect: ${analysisState.cache.land}<br>${r2}` +
-    (isEPR ? (epr ? "<br>EPR = Var(Y|Xᵢ)/Var(Y) from UA sheets (faithful, marine)"
-                  : "<br>EPR ≈ SRC² (variance share)") : "") + "</p>";
+    (isEPR ? (useSobol ? "<br>EPR = Sobol total-effect index Sₜᵢ (GPR metamodel, default config)"
+                       : epr ? "<br>EPR = Var(Y|Xᵢ)/Var(Y) from UA sheets (faithful, marine)"
+                             : "<br>EPR ≈ SRC² (variance share)") : "") + "</p>";
 }
 
 // ---- interaction profiler (JMP-style prediction profiler) ----------------
@@ -327,35 +444,39 @@ function drawProfiler() {
   const model = document.getElementById("model").value;
   const cat = "cat" + document.getElementById("category").value;
   p.title.textContent = "Interaction Profiler — metamodel";
-  const fit = fitRSM(model, cat);
-  if (!fit) {
-    p.body.innerHTML = "<p class='note'>Metric unavailable — Powell Kaplan–DeMaria " +
-      "precompute pending, or (for %TLC) the vulnerability curve is not loaded. " +
-      "Try Holland/Willoughby, or land effect None/Roughness.</p>";
+  const mm = buildMetamodel(model, cat);
+  if (!mm) {
+    const why = currentMetamodel() === "rsm"
+      ? "Metric unavailable — Powell Kaplan–DeMaria precompute pending, or (for %TLC) " +
+        "the vulnerability curve is not loaded. Try Holland/Willoughby, or land effect None/Roughness."
+      : "GPR / neural-net metamodels not loaded — run pipeline/fit_metamodels.py to " +
+        "generate outputs/web/metamodels.json.";
+    p.body.innerHTML = `<p class='note'>${why}</p>`;
     return;
   }
-  profilerState.fit = fit;
-  profilerState.ref = fit.stats.map(s => s.m);     // reference point = input means
+  profilerState.mm = mm;
+  profilerState.ref = mm.stats.map(s => s.m);       // reference point = input means
   buildProfilerDOM();
 }
 
 function buildProfilerDOM() {
-  const p = panels["prof"], fit = profilerState.fit, ref = profilerState.ref;
+  const p = panels["prof"], mm = profilerState.mm, ref = profilerState.ref;
   const model = document.getElementById("model").value;
   const catN = document.getElementById("category").value;
   const metricTxt = responseVar() === "tlc" ? "%TLC" : "mean peak wind (mph)";
   let sliders = "";
-  fit.stats.forEach((s, i) => {
+  mm.stats.forEach((s, i) => {
     sliders += `<label class="prof-sl"><span style="color:${VAR_COLORS[s.v]}">${s.v}</span>` +
       `<input type="range" data-i="${i}" min="${s.min}" max="${s.max}" ` +
       `step="${((s.max - s.min) / 100) || 0.01}" value="${ref[i]}"/>` +
       `<b data-v="${i}">${ref[i].toFixed(2)}</b></label>`;
   });
+  const cvTxt = mm.cv != null ? ` cv=${mm.cv.toFixed(2)}` : "";
   p.body.innerHTML =
     `<div class="prof-grid"></div>` +
     `<div class="prof-sliders">${sliders}</div>` +
-    `<p class="note">${model} · Cat ${catN} · Y = ${metricTxt} · R²=${fit.r2.toFixed(2)} · ` +
-    `Y range [${fit.ymin.toFixed(2)}, ${fit.ymax.toFixed(2)}]` +
+    `<p class="note">${METAMODEL_LABEL[mm.type]} · ${model} · Cat ${catN} · Y = ${metricTxt} · ` +
+    `R²=${mm.r2.toFixed(2)}${cvTxt} · Y range [${mm.ymin.toFixed(2)}, ${mm.ymax.toFixed(2)}]${mm.note}` +
     `<br>Move a slider: another variable's curve changing slope = its interaction with the moved variable.</p>`;
   p.body.querySelectorAll(".prof-sliders input").forEach(inp => {
     inp.addEventListener("input", () => {
@@ -370,15 +491,15 @@ function buildProfilerDOM() {
 }
 
 function updateProfilerPlots() {
-  const p = panels["prof"], fit = profilerState.fit, ref = profilerState.ref;
-  if (!p || !fit) return;
+  const p = panels["prof"], mm = profilerState.mm, ref = profilerState.ref;
+  if (!p || !mm) return;
   const grid = p.body.querySelector(".prof-grid");
   if (!grid) return;
   const NS = 40, W = 150, H = 96, mL = 26, mR = 6, mT = 8, mB = 16;
-  const ylo = fit.ymin, yhi = fit.ymax, yspan = (yhi - ylo) || 1;
+  const ylo = mm.ymin, yhi = mm.ymax, yspan = (yhi - ylo) || 1;
   const clampY = y => Math.max(ylo, Math.min(yhi, y));
   let html = "";
-  fit.stats.forEach((s, i) => {
+  mm.stats.forEach((s, i) => {
     const xlo = s.min, xhi = s.max, xspan = (xhi - xlo) || 1;
     const xpix = x => mL + ((x - xlo) / xspan) * (W - mL - mR);
     const ypix = y => mT + (1 - (y - ylo) / yspan) * (H - mT - mB);
@@ -386,9 +507,9 @@ function updateProfilerPlots() {
     for (let k = 0; k <= NS; k++) {
       const xv = xlo + (k / NS) * xspan;
       const raw = ref.slice(); raw[i] = xv;
-      pts += `${xpix(xv).toFixed(1)},${ypix(clampY(rsmPredict(fit, raw))).toFixed(1)} `;
+      pts += `${xpix(xv).toFixed(1)},${ypix(clampY(mm.predict(raw))).toFixed(1)} `;
     }
-    const refY = clampY(rsmPredict(fit, ref));
+    const refY = clampY(mm.predict(ref));
     let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
     svg += `<line x1="${mL}" y1="${ypix(ylo)}" x2="${W - mR}" y2="${ypix(ylo)}" stroke="#cbd5e1"/>`;
     svg += `<line x1="${mL}" y1="${mT}" x2="${mL}" y2="${H - mB}" stroke="#cbd5e1"/>`;
@@ -447,16 +568,142 @@ function drawCDF() {
     `<br>x = %TLC (loss cost, % of $68.2M exposure) · mean ${mu.toFixed(3)}% · median ${md.toFixed(3)}%</p>`;
 }
 
+// ---- compare metamodels: Linear (RSM) vs GPR vs NN -----------------------
+function drawCompare() {
+  const p = panels["cmp"];
+  if (!p || p.el.style.display === "none") return;
+  const model = document.getElementById("model").value;
+  const cat = "cat" + document.getElementById("category").value;
+  const catN = document.getElementById("category").value;
+  p.title.textContent = "Compare metamodels — Linear / GPR / NN";
+  const types = ["rsm", "gpr", "mlp"];
+  const mms = {};
+  types.forEach(t => { const m = buildMetamodel(model, cat, t); if (m) mms[t] = m; });
+  if (!mms.rsm && !mms.gpr && !mms.mlp) {
+    p.body.innerHTML = "<p class='note'>No metamodel available — for GPR/NN run " +
+      "pipeline/fit_metamodels.py to create metamodels.json.</p>";
+    return;
+  }
+  const have = types.filter(t => mms[t]);
+  const stats = (mms.rsm || mms.gpr || mms.mlp).stats;
+  const ref = stats.map(s => s.m);
+  const ylo = Math.min(...have.map(t => mms[t].ymin));
+  const yhi = Math.max(...have.map(t => mms[t].ymax));
+  const yspan = (yhi - ylo) || 1;
+  const clampY = y => Math.max(ylo, Math.min(yhi, y));
+  const NS = 40, W = 150, H = 96, mL = 26, mR = 6, mT = 8, mB = 16;
+
+  let gridHtml = "";
+  stats.forEach((s, i) => {
+    const xlo = s.min, xhi = s.max, xspan = (xhi - xlo) || 1;
+    const xpix = x => mL + ((x - xlo) / xspan) * (W - mL - mR);
+    const ypix = y => mT + (1 - (y - ylo) / yspan) * (H - mT - mB);
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+    svg += `<line x1="${mL}" y1="${ypix(ylo)}" x2="${W - mR}" y2="${ypix(ylo)}" stroke="#cbd5e1"/>`;
+    svg += `<line x1="${mL}" y1="${mT}" x2="${mL}" y2="${H - mB}" stroke="#cbd5e1"/>`;
+    have.forEach(t => {
+      let pts = "";
+      for (let k = 0; k <= NS; k++) {
+        const xv = xlo + (k / NS) * xspan;
+        const raw = ref.slice(); raw[i] = xv;
+        pts += `${xpix(xv).toFixed(1)},${ypix(clampY(mms[t].predict(raw))).toFixed(1)} `;
+      }
+      svg += `<polyline points="${pts.trim()}" fill="none" stroke="${METAMODEL_COLOR[t]}" stroke-width="1.8"/>`;
+    });
+    svg += `<text x="${mL}" y="${H - 3}" class="ax">${s.v}</text></svg>`;
+    gridHtml += `<div class="prof-cell">${svg}</div>`;
+  });
+
+  const legend = have.map(t =>
+    `<span class="lgi"><span style="background:${METAMODEL_COLOR[t]}"></span>${METAMODEL_LABEL[t]}</span>`).join("");
+  const rows = have.map(t =>
+    `<tr><td style="color:${METAMODEL_COLOR[t]}">${METAMODEL_LABEL[t]}</td>` +
+    `<td>${mms[t].r2.toFixed(3)}</td><td>${mms[t].cv != null ? mms[t].cv.toFixed(3) : "—"}</td></tr>`).join("");
+  const metricTxt = responseVar() === "tlc" ? "%TLC" : "mean peak wind (mph)";
+  p.body.innerHTML =
+    `<div class="prof-grid">${gridHtml}</div>` +
+    `<div class="legend2">${legend}</div>` +
+    `<table class="cmp-tbl"><tr><th>metamodel</th><th>R²</th><th>5-fold CV R²</th></tr>${rows}</table>` +
+    `<p class="note">${model} · Cat ${catN} · Y = ${metricTxt} · curves at the input means` +
+    `${mms.gpr ? mms.gpr.note : (mms.mlp ? mms.mlp.note : "")}` +
+    `<br>Overlaid partial-dependence: where Linear diverges from GPR/NN it is missing curvature/interaction.</p>`;
+}
+
 function redrawOpenPanels(modes) {
   (modes || Object.keys(panels)).forEach(mode => {
     if (panels[mode] && panels[mode].el.style.display !== "none") renderPanel(mode);
   });
 }
 
+// ---- mouse-wheel zoom on every plot the app produces (SVG viewBox) --------
+// Applies to all .ap-body svgs: the analysis charts (SRC/EPR/profiler/compare/
+// CDF) AND the windfield popup (isotachs + time series) — both share .ap-body.
+// The Leaflet map is untouched (its svg is in .leaflet-overlay-pane). Wheel up =
+// zoom in, wheel down = out, double-click = reset; each svg zooms independently.
+// Capture phase is REQUIRED: Leaflet's disableScrollPropagation on each floating
+// panel stops the wheel event during bubble, so a bubble-phase listener never
+// sees it — capturing runs first, top-down.
+const PLOT_MAX_ZOOM = 12;
+
+function setupPlotZoom() {
+  document.addEventListener("wheel", e => {
+    const svg = e.target.closest && e.target.closest(".ap-body svg");
+    if (!svg) return;
+    const vb = svg.getAttribute("viewBox");
+    if (!vb) return;
+    e.preventDefault();
+    const [x, y, w, h] = vb.split(/[ ,]+/).map(Number);
+    if (!svg._vb0) svg._vb0 = vb;
+    const w0 = +svg._vb0.split(/[ ,]+/)[2];
+    const r = svg.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+    const cx = x + px * w, cy = y + py * h;
+    const k = e.deltaY < 0 ? 0.85 : 1 / 0.85;
+    const nw = Math.min(w0, Math.max(w0 / PLOT_MAX_ZOOM, w * k));
+    const nh = h * (nw / w);
+    svg.setAttribute("viewBox", `${cx - px * nw} ${cy - py * nh} ${nw} ${nh}`);
+  }, { passive: false, capture: true });
+
+  document.addEventListener("dblclick", e => {
+    const svg = e.target.closest && e.target.closest(".ap-body svg");
+    if (svg && svg._vb0) svg.setAttribute("viewBox", svg._vb0);
+  }, { capture: true });
+
+  // drag to pan a zoomed plot. mousedown is captured (Leaflet stops it on panels
+  // during bubble); the pan is clamped to the original viewBox, so dragging does
+  // nothing until you have zoomed in.
+  let pan = null;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  document.addEventListener("mousedown", e => {
+    const svg = e.target.closest && e.target.closest(".ap-body svg");
+    if (!svg) return;
+    const vb = svg.getAttribute("viewBox");
+    if (!vb) return;
+    const [x, y, w, h] = vb.split(/[ ,]+/).map(Number);
+    const [bx, by, bw, bh] = (svg._vb0 || vb).split(/[ ,]+/).map(Number);
+    const r = svg.getBoundingClientRect();
+    pan = { svg, sx: e.clientX, sy: e.clientY, x, y, w, h,
+            ux: w / r.width, uy: h / r.height, bx, by, bw, bh };
+    svg.style.cursor = "grabbing";
+    e.preventDefault();
+  }, { capture: true });
+  document.addEventListener("mousemove", e => {
+    if (!pan) return;
+    const nx = clamp(pan.x - (e.clientX - pan.sx) * pan.ux, pan.bx, pan.bx + pan.bw - pan.w);
+    const ny = clamp(pan.y - (e.clientY - pan.sy) * pan.uy, pan.by, pan.by + pan.bh - pan.h);
+    pan.svg.setAttribute("viewBox", `${nx} ${ny} ${pan.w} ${pan.h}`);
+  });
+  document.addEventListener("mouseup", () => {
+    if (pan) { pan.svg.style.cursor = ""; pan = null; }
+  });
+}
+
 function setupAnalysis() {
+  setupPlotZoom();
   document.getElementById("btnSRC").addEventListener("click", () => openPanel("src"));
   document.getElementById("btnEPR").addEventListener("click", () => openPanel("epr"));
   document.getElementById("btnProf").addEventListener("click", () => openPanel("prof"));
+  document.getElementById("btnCompare").addEventListener("click", () => openPanel("cmp"));
   document.getElementById("btnCDF").addEventListener("click", () => openPanel("cdf"));
   // model / land effect / response change -> invalidate cache + redraw open panels
   ["model", "landEffect", "response"].forEach(id =>
@@ -464,7 +711,10 @@ function setupAnalysis() {
       analysisState.cache = null;
       redrawOpenPanels();
     }));
+  // metamodel choice drives profiler/compare (and EPR Sobol); no cache invalidation needed
+  document.getElementById("metamodel").addEventListener("change",
+    () => redrawOpenPanels(["prof", "cmp", "epr"]));
   // category change affects the per-category panels only (SRC/EPR span all cats)
   document.getElementById("category").addEventListener("change",
-    () => redrawOpenPanels(["prof", "cdf"]));
+    () => redrawOpenPanels(["prof", "cmp", "cdf"]));
 }

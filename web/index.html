@@ -86,6 +86,7 @@
         <option value="wind" selected>Max wind speed (mph)</option>
         <option value="loss">Loss (MDR)</option>
         <option value="landwater">Land / Water</option>
+        <option value="sensitivity">Sensitivity (dominant input)</option>
       </select>
       <div id="legend"></div>
     </section>
@@ -98,9 +99,17 @@
           <option value="tlc">Loss cost %TLC</option>
         </select>
       </label>
+      <label>Metamodel
+        <select id="metamodel">
+          <option value="rsm" selected>Linear (RSM)</option>
+          <option value="gpr">Gaussian process</option>
+          <option value="mlp">Neural net</option>
+        </select>
+      </label>
       <button id="btnSRC" class="analysis-btn">Sensitivity (SRC)</button>
       <button id="btnEPR" class="analysis-btn">Uncertainty (EPR)</button>
       <button id="btnProf" class="analysis-btn">Interaction Profiler</button>
+      <button id="btnCompare" class="analysis-btn">Compare metamodels</button>
       <button id="btnCDF" class="analysis-btn">%TLC CDF</button>
     </section>
 

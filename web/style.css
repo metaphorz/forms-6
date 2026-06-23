@@ -65,7 +65,7 @@ body.theme-light #legend .lg { color: #2a3744; }
   font-weight: 600; cursor: move; flex: 0 0 auto; user-select: none; }
 .ap-close { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
 .ap-body { padding: 10px 12px; flex: 1 1 auto; overflow: auto; }
-.ap-body svg { width: 100%; height: auto; }
+.ap-body svg { width: 100%; height: auto; cursor: zoom-in; }
 .ap-body .ax { font-size: 10px; fill: #475569; }
 .ap-body .note { font-size: 11px; color: #64748b; margin: 6px 0 0; }
 .legend2 { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
@@ -81,6 +81,11 @@ body.theme-light #legend .lg { color: #2a3744; }
 .prof-sl span { width: 34px; font-weight: 600; }
 .prof-sl input[type="range"] { flex: 1; min-width: 0; }
 .prof-sl b { width: 52px; text-align: right; font-variant-numeric: tabular-nums; color: #1c2530; }
+
+/* compare-metamodels table */
+.cmp-tbl { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }
+.cmp-tbl th, .cmp-tbl td { text-align: left; padding: 2px 6px; border-bottom: 1px solid #e2e8f0; }
+.cmp-tbl th { color: #64748b; font-weight: 600; }
 
 .grid-pt-land { fill: #6b7785; }
 .grid-pt-water { fill: #2b6cb0; }

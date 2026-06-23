@@ -16,6 +16,7 @@ const state = {
   tiles: null,            // basemap tile layer (swapped on theme change)
   hoverTip: null,         // free-floating tooltip for nearest-point hover
   pixelPts: null,         // cached container-pixel coords of grid points
+  metamodels: null,       // Phase B: precomputed GPR + NN params (default config)
   meanMode: false,        // true -> show per-point mean wind over all 100 vectors
   layers: { track: null, landfall: null },
 };
@@ -140,6 +141,11 @@ function renderLegend(mode) {
   if (mode === "landwater") {
     el.innerHTML = `<div class="lg"><span style="background:#6b7785"></span>Land</div>` +
                    `<div class="lg"><span style="background:#2b6cb0"></span>Water</div>`;
+    return;
+  }
+  if (mode === "sensitivity") {
+    el.innerHTML = SA_VARS.map(v =>
+      `<div class="lg"><span style="background:${VAR_COLORS[v]}"></span>${v}</div>`).join("");
     return;
   }
   el.innerHTML = WIND_STOPS.map(([thr, col]) =>
@@ -375,6 +381,10 @@ function updateField() {
   if (kdPending) wind = null;
   state.wind = wind;
 
+  // grid-point-level sensitivity: dominant input per land vertex (linear SRC)
+  const sensMode = colorBy === "sensitivity";
+  const sens = sensMode ? computeGridSensitivity(model, currentSelection().cat) : null;
+
   const showWater = document.getElementById("showWater").checked;
   const showGrid = document.getElementById("showGrid").checked;
   const display = document.getElementById("display").value;
@@ -410,6 +420,9 @@ function updateField() {
     const w = wind ? wind[i] : null;
     if (colorBy === "landwater") {
       fill = p.land ? "#6b7785" : "#2b6cb0";
+    } else if (sensMode) {
+      fill = (p.land && sens && sens[i] >= 0) ? VAR_COLORS[SA_VARS[sens[i]]] : "#243244";
+      if (p.land && sens && sens[i] >= 0) n++;
     } else if (lossMode) {
       const mdr = w != null ? mdrAt(w) : null;
       fill = p.land ? lossColor(mdr) : "#243244";   // loss only meaningful on land
@@ -440,6 +453,11 @@ function updateField() {
     info.textContent = "Powell Kaplan–DeMaria field: exact precompute scheduled after the UA run.";
   } else if (colorBy === "wind") {
     info.textContent = "Powell field not loaded yet…";
+  } else if (sensMode && sens) {
+    info.innerHTML = `${tag}<br>Grid-point sensitivity · dominant input over ${n} land pts` +
+      `<br><span class="note">linear SRC per vertex</span>`;
+  } else if (sensMode) {
+    info.textContent = "Sensitivity needs a wind field — Powell K&D precompute pending.";
   } else {
     info.innerHTML = `${g.n_points} vertices &middot; ${g.n_land} land / ${g.n_water} water`;
   }
@@ -501,6 +519,8 @@ async function init() {
     catch (e) { state.powellUa = null; }     // faithful EPR (Option 1)
     try { state.vuln = await (await fetch("../outputs/web/vulnerability.json")).json(); }
     catch (e) { state.vuln = null; }         // MDR vs wind (loss)
+    try { state.metamodels = await (await fetch("../outputs/web/metamodels.json")).json(); }
+    catch (e) { state.metamodels = null; }   // Phase B: precomputed GPR + NN (default config)
     buildMap();
     setupHover();
     setupAnalysis();

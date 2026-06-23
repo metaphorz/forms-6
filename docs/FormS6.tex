@@ -282,16 +282,75 @@ cost ranges from roughly $14\%$ to $53\%$ of exposure with a mean near $33\%$.
 \label{fig:tlccdf}
 \end{figure}
 
-These tools are pure client-side computations (no precompute). Gaussian-process
-regression with automatic-relevance-determination length scales and a small
-neural network, together with variance-based total/interaction indices and
-grid-point-level sensitivity, are the planned next step.
+The linear, second-order surface above is computed live in the browser. The
+machine-learning metamodels below are instead fit offline and only evaluated in
+the browser.
+
+\subsection{Machine-learning metamodels (GPR and neural network)}
+A \textbf{Metamodel} selector switches the profiler backend among three fits of
+the same data: the live second-order \emph{Linear (RSM)} above, a
+\textbf{Gaussian-process regression (GPR)}, and a \textbf{neural network}. The
+latter two follow the deck's recommendation to go beyond first-order regression.
+Both are fit with scikit-learn in \texttt{pipeline/fit\_metamodels.py}: the GPR
+uses an anisotropic (automatic-relevance-determination, ARD) squared-exponential
+kernel; the network is a two-hidden-layer perceptron ($6\times6$ tanh units,
+L-BFGS, 5-fold cross-validated). To keep the deployed viewer a zero-backend static
+page, training is done \emph{offline} for the default configuration (Powell +
+surface roughness) per category and response; the fitted kernel hyperparameters /
+weights are exported to \texttt{metamodels.json} and the browser only evaluates
+them (a kernel dot-product for GPR, a forward pass for the network). The exported
+parameters reproduce scikit-learn's own \texttt{predict} to within $10^{-9}$.
+
+A \textbf{Compare} panel (Figure~\ref{fig:compare}) overlays the three
+partial-dependence curves with an $R^2$ / cross-validated-$R^2$ table. Because the
+Powell simulator is a smooth, deterministic function of the six inputs, all three
+metamodels reach $R^2\approx1$ and their profiles nearly coincide; this agreement
+is itself the result---three independent methods recovering the same main effects
+and interaction curvature is strong evidence the structure is real, and confirms
+that a second-order surface already suffices here. The added value of GPR/NN is
+diagnostic rather than predictive: the GPR's ARD length scales rank the inputs by
+influence, and its variance function yields Sobol \emph{total-effect} indices
+$S_{T_i}$ (main effect plus all interactions involving $X_i$), which replace the
+$\text{SRC}^2$ approximation in the EPR panel when GPR is selected. These recover
+the ROA ordering---$S_{T_i}$ largest for WSP at Category~1 and for $R_{\max}$ at
+Category~5.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{analysis_compare.png}
+\caption{Compare-metamodels panel: Linear (RSM), Gaussian process, and neural
+network partial-dependence curves overlaid (Category~5, Powell), with the
+$R^2$/cross-validated-$R^2$ table. The three nearly coincide---the agreement
+validates the recovered effect/interaction structure.}
+\label{fig:compare}
+\end{figure}
+
+\subsection{Grid-point-level sensitivity}
+The SRC/EPR analyses above summarize the land-mean response. The deck also
+recommends sensitivity \emph{at the grid-point level}, before averaging. The
+\textbf{Sensitivity (dominant input)} colour mode does exactly this: at each land
+vertex it regresses that vertex's peak wind over the 100 vectors on the six
+standardized inputs and colours the vertex by its dominant input
+(Figure~\ref{fig:gridsens}). The result is a spatial map of which storm parameter
+controls the hazard where---e.g.\ for Category~1 the radius of maximum winds
+$R_{\max}$ dominates the northern band while WSP dominates elsewhere---information
+that a single grid-averaged table cannot convey.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{grid_sensitivity.png}
+\caption{Grid-point-level sensitivity (Category~1, Powell): each land vertex
+coloured by its dominant input from a per-vertex standardized regression. The
+dominant parameter varies spatially across the grid.}
+\label{fig:gridsens}
+\end{figure}
 
 \section{Interface and reproducibility}
 The viewer offers model / category / input-vector selection (the input vector
 chooses one of the 100 randomized storms for the category), the WSP$\to B$
 distribution control, the three-way land-effect selector, a colour-by control
-(peak wind, loss MDR, or land/water), a points/filled-contour display toggle,
+(peak wind, loss MDR, land/water, or grid-point dominant-sensitivity), a
+points/filled-contour display toggle,
 light and dark themes (Figure~\ref{fig:light}), and nearest-point hover (peak
 wind, loss, coordinates, land/water, place name, and the active input
 parameters). Beneath the input-vector slider, a \textbf{Mean} toggle recolours
@@ -302,7 +361,9 @@ vectors across the three categories. \textbf{Left-clicking} a vertex opens a flo
 (Figure~\ref{fig:popup}) with the storm-relative isotach field---the marked
 vertex at its peak time---and that vertex's wind time series over the 12-hour
 passage. The Sensitivity and Uncertainty results open as independent, movable,
-resizable windows.
+resizable windows. Every plot the viewer draws---the analysis charts and the
+windfield popup alike---supports mouse-wheel zoom about the cursor, drag-to-pan
+once zoomed, and double-click to reset, for close inspection of individual curves.
 
 \begin{figure}[H]
 \centering

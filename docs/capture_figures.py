@@ -41,6 +41,9 @@ FIGURES = [
     ("analysis_profiler", {"model": "powell", "category": "5", "_btn": "btnProf"}, ".analysis-panel"),
     ("analysis_tlc_cdf",  {"model": "powell", "category": "5", "response": "tlc",
                           "_btn": "btnCDF"}, ".analysis-panel"),
+    ("analysis_compare",  {"model": "powell", "category": "5", "_btn": "btnCompare"}, ".analysis-panel"),
+    ("grid_sensitivity",  {"model": "powell", "category": "1",
+                          "colorBy": "sensitivity", "display": "points"}, None),
     ("windfield_popup",  {"model": "holland", "category": "5", "_click": [30, 0]}, ".wf-panel"),
 ]
 
