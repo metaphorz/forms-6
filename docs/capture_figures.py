@@ -38,6 +38,9 @@ FIGURES = [
                           "display": "points", "colorBy": "wind"}, None),
     ("analysis_src",     {"model": "powell", "_btn": "btnSRC"}, ".analysis-panel"),
     ("analysis_epr",     {"model": "powell", "_btn": "btnEPR"}, ".analysis-panel"),
+    ("analysis_profiler", {"model": "powell", "category": "5", "_btn": "btnProf"}, ".analysis-panel"),
+    ("analysis_tlc_cdf",  {"model": "powell", "category": "5", "response": "tlc",
+                          "_btn": "btnCDF"}, ".analysis-panel"),
     ("windfield_popup",  {"model": "holland", "category": "5", "_click": [30, 0]}, ".wf-panel"),
 ]
 

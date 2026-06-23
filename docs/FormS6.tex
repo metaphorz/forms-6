@@ -130,7 +130,7 @@ $N$-$S=0$ track land mask. Figure~\ref{fig:kdloss}~(left) shows the resulting
 inland decay for a Category~5 storm. The two options are kept exclusive because
 $\alpha$ already lumps surface friction with loss of the ocean energy source.
 
-\section{Sensitivity and uncertainty analysis}
+\section{Sensitivity and uncertainty analysis}\label{sec:sa}
 Following Iman, Johnson, and Schroeder (2001), as the ROA cites:
 \begin{itemize}
 \item \textbf{Sensitivity (SRC).} Standardized regression coefficients from
@@ -205,6 +205,87 @@ Kaplan--DeMaria-decayed wind (left) and the corresponding loss field (right).
 loss field as Mean Damage Ratio (right), both as filled contours.}
 \label{fig:kdloss}
 \end{figure}
+
+\section{Metamodels and the interaction profiler}\label{sec:metamodel}
+The standardized regression coefficients of Section~\ref{sec:sa} treat the
+input--output map as \emph{first order}: each input acts independently and
+linearly. A 2026 review of the Form~S-6 sensitivity procedure (M.~Johnson and
+colleagues) noted that the simulated response is in fact nonlinear and that the
+inputs \emph{interact}, and recommended replacing the linear fit with a flexible
+\emph{metamodel} (response surface, Gaussian-process regression, or neural
+network) examined through an interaction \emph{profiler}. The viewer implements
+this directly.
+
+\paragraph{Response variable.}
+A \textbf{Response (Y)} selector chooses the scalar output that every analysis
+tool regresses on: either the \textbf{mean peak wind} over the 682 land vertices
+(Section~\ref{sec:sa}) or the \textbf{loss cost} $\%\text{TLC}(i)$, defined
+exactly as in Section~\ref{sec:loss},
+\[
+\%\text{TLC}(i)=\frac{\text{TLC}(i)}{\$68{,}200{,}000}\times100\%
+=100\times\overline{\text{MDR}}_{\text{land}}(i),
+\]
+the total loss cost of input vector $i$ as a percent of total exposure, equal to
+$100\times$ the mean Mean-Damage-Ratio over the 682 land vertices. Switching the
+response re-fits the SRC, EPR, profiler, and CDF panels live (for loss-cost the
+faithful EPR worksheets do not apply, so the $\text{SRC}^2$ variance share is
+used).
+
+\paragraph{Second-order metamodel.}
+For the profiler the viewer fits, per category, a standardized second-order
+response surface in the six inputs $z_k=(X_k-\bar X_k)/s_{X_k}$,
+\[
+\hat Y=b_0+\sum_{k} b_k z_k+\sum_{k} b_{kk} z_k^{2}
+        +\sum_{j<k} b_{jk}\,z_j z_k ,
+\]
+i.e.\ linear, quadratic, and all $15$ pairwise cross terms ($28$ coefficients,
+fit by least squares over the $100$ Latin-hypercube vectors via the normal
+equations with a small ridge for stability). The quadratic and cross terms are
+what let the metamodel \emph{bend} and express interactions; a purely linear fit
+would draw flat, parallel profiles. Because the simulator is a smooth
+deterministic function of the six inputs, this surface typically reproduces the
+$100$ runs almost exactly ($R^2\!\approx\!1$).
+
+\paragraph{Interaction profiler.}
+The profiler (Figure~\ref{fig:profiler}) draws one partial-dependence curve per
+input: $\hat Y$ as that input sweeps its range while the other five are held at a
+reference point shown by the dashed crosshair. Six sliders set the reference
+point (initialized at the input means). Dragging one slider re-draws the other
+five curves; \emph{a curve whose slope changes is interacting with the moved
+variable}. This is the JMP-style ``prediction profiler'' of the review deck: for
+the Category-5 Powell fit, for example, the $R_{\max}$ profile is strongly
+concave and its slope steepens as CP is lowered (more intense storms), the
+signature two-factor CP\,$\times$\,$R_{\max}$ interaction.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{analysis_profiler.png}
+\caption{Interaction profiler for the Category~5 Powell metamodel
+($Y=$ mean peak wind). Each panel is the partial-dependence of $\hat Y$ on one
+input with the others held at the slider reference point (dashed crosshair).
+Moving a slider re-renders the other curves, so a change of slope reveals the
+interaction between that pair of variables.}
+\label{fig:profiler}
+\end{figure}
+
+\paragraph{Loss-cost distribution.}
+A companion panel plots the empirical CDF of $\%\text{TLC}(i)$ over the $100$
+vectors for the selected category (the ROA's Fig.~5 analogue), summarizing the
+spread of simulated loss cost. For Category~5 (Figure~\ref{fig:tlccdf}) the loss
+cost ranges from roughly $14\%$ to $53\%$ of exposure with a mean near $33\%$.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\textwidth]{analysis_tlc_cdf.png}
+\caption{Empirical CDF of $\%\text{TLC}(i)$---loss cost as a percent of the
+\$68.2M exposure---over the $100$ Category~5 input vectors (Powell).}
+\label{fig:tlccdf}
+\end{figure}
+
+These tools are pure client-side computations (no precompute). Gaussian-process
+regression with automatic-relevance-determination length scales and a small
+neural network, together with variance-based total/interaction indices and
+grid-point-level sensitivity, are the planned next step.
 
 \section{Interface and reproducibility}
 The viewer offers model / category / input-vector selection (the input vector
