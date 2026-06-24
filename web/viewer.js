@@ -221,21 +221,34 @@ function computeMeanWind(model, cat) {
   return out;
 }
 
-// CSV of the 6 Form S-6 input variables for all 100 vectors x 3 categories
-function downloadInputsCsv() {
-  if (!state.inputs) return;
+// Right-click a grid point -> per-point loss-cost CSV over all 100 input vectors.
+// 8 columns: CP, Rmax, VT, WSP, CF, FFP, %LC(i,x,y), %TLC(i)
+//   %LC(i,x,y) = LC(i,x,y) / EXPOSURE_VALUE   (loss cost at this point / $/vertex)
+//   TLC(i)     = sum_x sum_y LC(i,x,y)         (total loss cost over all land points)
+//   %TLC(i)    = TLC(i) / (total exposure)
+function downloadGridPointCsv(idx) {
+  if (!state.inputs || !state.vuln) { alert("Need inputs + vulnerability curve loaded for a loss-cost CSV."); return; }
+  const { model, cat } = currentSelection();
+  const recs = state.inputs[cat] || [];
+  const pt = state.grid.points[idx];
   const cols = ["CP", "Rmax", "VT", "WSP", "CF", "FFP"];
-  const rows = [["Category", "Vector", ...cols].join(",")];
-  ["cat1", "cat3", "cat5"].forEach(cat => {
-    const label = cat.slice(3);                // "1" | "3" | "5"
-    (state.inputs[cat] || []).forEach(r => {
-      rows.push([label, r.vector, ...cols.map(c => r[c])].join(","));
-    });
-  });
+  const totalExposure = state.grid.n_land * EXPOSURE_VALUE;
+  const rows = [[...cols, "%LC", "%TLC"].join(",")];
+  for (let v = 0; v < recs.length; v++) {
+    const w = computeWindFor(model, cat, v);
+    if (!w || typeof w === "string") {       // null or "kd-pending" — no field yet
+      alert(`Wind field unavailable for ${model} ${cat.toUpperCase()} — cannot build CSV.`);
+      return;
+    }
+    const pctLC = pt.land ? mdrAt(w[idx]) : 0;     // LC/EXPOSURE_VALUE = MDR on land, 0 on water
+    let tlc = 0;
+    state.grid.points.forEach((q, j) => { if (q.land) tlc += mdrAt(w[j]) * EXPOSURE_VALUE; });
+    rows.push([...cols.map(c => recs[v][c]), pctLC, tlc / totalExposure].join(","));
+  }
   const blob = new Blob([rows.join("\n")], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = "formS6_inputs.csv";
+  a.href = url; a.download = `formS6_losscost_${cat}_x${pt.ew}_y${pt.ns}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
@@ -366,6 +379,16 @@ function setupHover() {
     }
     if (best >= 0) openWindfieldPopup(best);
   });
+  // right-click the nearest dot -> per-point loss-cost CSV (100 input vectors)
+  state.map.on("contextmenu", e => {
+    const cp = e.containerPoint, pts = state.pixelPts;
+    let best = -1, bd = (HOVER_PX + 4) * (HOVER_PX + 4);
+    for (let i = 0; i < pts.length; i++) {
+      const dx = pts[i].x - cp.x, dy = pts[i].y - cp.y, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = i; }
+    }
+    if (best >= 0) downloadGridPointCsv(best);
+  });
 }
 
 // ---- recolor + popups ----------------------------------------------------
@@ -489,7 +512,6 @@ function wireControls() {
       updateField();
     }
   });
-  document.getElementById("btnCsv").addEventListener("click", downloadInputsCsv);
 
   document.getElementById("showWater").addEventListener("change", updateField);
   document.getElementById("showGrid").addEventListener("change", updateField);

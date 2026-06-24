@@ -318,5 +318,27 @@ the +/-250 km solver boundary -> 0 in the corners. The old +/-90 km edge was
 storm extent. powell.json / powell_kd.json peak winds unchanged (those already
 sampled the PDE to 250 km). No JS change needed.
 
+## Per-grid-point loss-cost CSV (2026-06-24) — DONE
+Replaced the global **CSV** button (exported all 100 input vectors x 3 categories)
+with a **right-click any grid vertex** action that exports a per-point loss-cost
+CSV, per the statistician's spec.
+
+- [x] `index.html`: removed `#btnCsv` from the vec-actions div (only `#btnMean` remains).
+- [x] `viewer.js`: removed `downloadInputsCsv()` + its listener; added
+      `downloadGridPointCsv(idx)` and a `contextmenu` handler on the nearest dot.
+- [x] CSV: 100 rows (one per input vector i) x 8 columns for the current
+      model/category/land-effect:
+      `CP, Rmax, VT, WSP, CF, FFP, %LC, %TLC` where
+      `%LC(i,x,y) = LC(i,x,y)/$100,000` (loss cost at that vertex; 0 on water) and
+      `%TLC(i) = TLC(i)/(total exposure)`, `TLC(i) = sum_x sum_y LC(i,x,y)` over all
+      land vertices. Total exposure = `n_land * $100,000` (= $68.2M), not hardcoded.
+      Filename: `formS6_losscost_<cat>_x<ew>_y<ns>.csv`.
+- [x] Selenium test `tests/auto/test_gridpoint_csv.py` — button gone, 8x100 CSV
+      captured from the right-click handler, no console errors. **PASSED.**
+- [x] Docs: updated `docs/FormS6.tex` interface paragraph; regenerated
+      `docs/figures/grid_sensitivity.png` (the only figure showing the old CSV
+      button) via the canonical settings in `docs/capture_figures.py`; rebuilt
+      `docs/FormS6.pdf`.
+
 ## Review
 _(to be filled in as work proceeds)_

@@ -355,9 +355,13 @@ light and dark themes (Figure~\ref{fig:light}), and nearest-point hover (peak
 wind, loss, coordinates, land/water, place name, and the active input
 parameters). Beneath the input-vector slider, a \textbf{Mean} toggle recolours
 the grid by the per-vertex wind averaged over all 100 input vectors (for the
-current model, category, and land effect), and a \textbf{CSV} button exports the
-six Form S-6 input variables (CP, $R_{\max}$, VT, WSP, CF, FFP) for all 100
-vectors across the three categories. \textbf{Left-clicking} a vertex opens a floating windfield popup
+current model, category, and land effect). \textbf{Right-clicking} a vertex
+exports a per-point loss-cost CSV for the current model/category/land-effect:
+$100$ rows (one per input vector) by $8$ columns---the six Form S-6 inputs (CP,
+$R_{\max}$, VT, WSP, CF, FFP) plus $\%\mathrm{LC}(i,x,y)=\mathrm{LC}(i,x,y)/\$100{,}000$
+(the loss cost at that vertex) and $\%\mathrm{TLC}(i)=\mathrm{TLC}(i)/(\text{total
+exposure})$, where $\mathrm{TLC}(i)=\sum_x\sum_y \mathrm{LC}(i,x,y)$ over all land
+vertices. \textbf{Left-clicking} a vertex opens a floating windfield popup
 (Figure~\ref{fig:popup}) with the storm-relative isotach field---the marked
 vertex at its peak time---and that vertex's wind time series over the 12-hour
 passage. The Sensitivity and Uncertainty results open as independent, movable,
