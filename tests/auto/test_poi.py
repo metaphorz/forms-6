@@ -78,6 +78,19 @@ try:
     assert driver.find_elements(By.CSS_SELECTOR, ".poi-detail .poi-print"), "Print button missing"
     print("detail info line:", info_txt.split(chr(10))[0], "| SVGs:", n_svg)
 
+    # 4b) "Open all" builds one page with a section + 2 plots per point
+    all_html = driver.execute_script("""
+      let cap=''; const fd={write:s=>cap+=s, close:()=>{}};
+      window.open=()=>({document:fd, print:()=>{}});
+      poiOpenAll(); return cap;
+    """)
+    n_sec = all_html.count('class="poi-sec"')
+    n_svg_all = all_html.count("<svg")
+    assert n_sec == 6, f"expected 6 sections in combined page, got {n_sec}"
+    assert n_svg_all == 12, f"expected 12 SVGs (2 per point), got {n_svg_all}"
+    assert "window.print()" in all_html, "combined page missing print button"
+    print("combined page: sections", n_sec, "svgs", n_svg_all)
+
     # 5) delete one -> 5
     rows()[0].find_element(By.CSS_SELECTOR, ".poi-del").click()
     time.sleep(0.4)

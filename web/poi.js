@@ -169,6 +169,43 @@ function poiPrint(idx) {
   w.document.close();
 }
 
+// open one printable page stacking every point's detail (info + plots).
+// The page has its own Print / Save-PDF button; sections page-break for printing.
+function poiOpenAll() {
+  const idxs = poi.list.map(([ew, ns]) => poiGridIdx(ew, ns)).filter(i => i >= 0);
+  if (!idxs.length) { poiSetErr("No points to open."); return; }
+  const { model, cat, vIdx } = currentSelection();
+  const w = window.open("", "_blank", "width=820,height=1000");
+  if (!w) { poiSetErr("Pop-up blocked — allow pop-ups to open the report."); return; }
+  const title = `Form S-6 — Points of Interest (${idxs.length})`;
+  const sections = idxs.map(idx => {
+    const pt = state.grid.points[idx];
+    return `<section class="poi-sec"><h2>(${pt.ew},${pt.ns})` +
+      `${pt.place ? " — " + pt.place : ""}</h2>${poiDetailHTML(idx)}</section>`;
+  }).join("");
+  w.document.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>` +
+    `body{font:13px/1.5 -apple-system,system-ui,sans-serif;color:#1c2530;margin:0;}` +
+    `.bar{position:sticky;top:0;background:#1c2530;color:#fff;padding:10px 24px;` +
+    `display:flex;justify-content:space-between;align-items:center;}` +
+    `.bar button{padding:6px 14px;background:#2563eb;color:#fff;border:none;` +
+    `border-radius:5px;font-size:13px;cursor:pointer;}` +
+    `.wrap{padding:18px 24px;} h1{font-size:18px;margin:0 0 2px;}` +
+    `.sub{color:#9fb0c0;font-size:12px;}` +
+    `.poi-sec{border-top:1px solid #e2e8f0;padding:14px 0;}` +
+    `.poi-sec h2{font-size:15px;margin:0 0 6px;} h4{margin:12px 0 4px;font-size:14px;}` +
+    `.poi-info{font-size:13px;line-height:1.6;} hr{border:none;border-top:1px solid #e2e8f0;margin:6px 0;}` +
+    `svg{width:100%;max-width:540px;height:auto;} .note{color:#64748b;font-size:11px;}` +
+    `.ax{font-size:10px;fill:#475569;}` +
+    `@media print{.bar{display:none;} .poi-sec{break-inside:avoid;page-break-after:always;border-top:none;}}` +
+    `</style></head><body>` +
+    `<div class="bar"><span>${title}</span><button onclick="window.print()">Print / Save PDF</button></div>` +
+    `<div class="wrap"><h1>${title}</h1>` +
+    `<div class="sub">${model} · ${cat.toUpperCase()} · v${vIdx + 1} · ` +
+    `generated ${new Date().toLocaleString()}</div>${sections}</div></body></html>`);
+  w.document.close();
+}
+
 function setupPoi() {
   poi.list = poiLoad();
   const inp = document.getElementById("poiInput");
@@ -180,6 +217,7 @@ function setupPoi() {
   document.getElementById("poiAdd").addEventListener("click", doAdd);
   inp.addEventListener("keydown", e => { if (e.key === "Enter") doAdd(); });
   document.getElementById("poiReset").addEventListener("click", poiReset);
+  document.getElementById("poiAll").addEventListener("click", poiOpenAll);
   const panel = document.getElementById("poiPanel");
   if (window.L) L.DomEvent.disableClickPropagation(panel);
   // draggable by its header, like the floating analysis/windfield panels
