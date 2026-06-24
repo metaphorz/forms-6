@@ -355,7 +355,9 @@ light and dark themes (Figure~\ref{fig:light}), and nearest-point hover (peak
 wind, loss, coordinates, land/water, place name, and the active input
 parameters). Beneath the input-vector slider, a \textbf{Mean} toggle recolours
 the grid by the per-vertex wind averaged over all 100 input vectors (for the
-current model, category, and land effect). \textbf{Right-clicking} a vertex
+current model, category, and land effect); the viewer \emph{opens} in this mean
+view (the slider disabled), and toggling \textbf{Mean} off re-enables the slider
+to step through individual input vectors. \textbf{Right-clicking} a vertex
 exports a per-point loss-cost CSV for the current model/category/land-effect:
 $100$ rows (one per input vector) by $8$ columns---the six Form S-6 inputs (CP,
 $R_{\max}$, VT, WSP, CF, FFP) plus $\%\mathrm{LC}(i,x,y)=\mathrm{LC}(i,x,y)/\$100{,}000$

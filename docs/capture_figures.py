@@ -83,6 +83,11 @@ def main():
             drv.get(URL)
             WebDriverWait(drv, 20).until(
                 lambda d: "Loading" not in d.find_element(By.ID, "info").text)
+            # viewer now opens in Mean view by default; these figures are single-vector,
+            # so turn Mean off (re-enabling the slider) before applying controls.
+            drv.execute_script(
+                "if (state.meanMode) document.getElementById('btnMean').click();")
+            time.sleep(0.2)
             apply(drv, controls)
             time.sleep(2.5)  # render + tiles
             out = FIG / f"{name}.png"
