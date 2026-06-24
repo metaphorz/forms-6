@@ -296,5 +296,27 @@ for accuracy.
   wanted, that is a distinct Python/notebook companion, NOT this static viewer.
   This app only ever *evaluates* pre-fit models.
 
+## Powell wind-vs-time cliff fix (2026-06-23)
+The Powell popup's "wind vs time" curve dropped abruptly to 0 (unlike Holland/
+Willoughby's smooth decay). Cause: the stored storm-relative field spanned only
++/-90 km, where Powell winds are still ~66-69 mph; the popup sampler returns a
+hard 0 outside that box, so the curve cliffs once the storm-relative track exits
++/-90 km. The PDE itself and the peak-wind map are correct (the map samples the
+PDE directly out to 250 km).
+
+Fix (Option 1): widen the stored field to +/-250 km (the PDE solver's rmax_km),
+keeping N=81. Winds reach 0 at the 250 km solver boundary, so the curve now
+decays smoothly. No JS change needed (popup reads halfKm from the JSON).
+
+- [x] windfield_grid.py: FIELD_HALF_KM 90 -> 250 (N=81, step 2.25 -> 6.25 km)
+- [x] Re-run windfield_grid.py to regenerate powell_field.json (779s, 300 solves)
+- [x] Verify the field edge now decays toward 0
+
+Result: cat3 center-row now reads 0 (eye) -> ~56 mph at +/-125 km -> ~32 mph at
+the +/-250 km solver boundary -> 0 in the corners. The old +/-90 km edge was
+~66-69 mph clipped straight to 0; now the curve decays smoothly across the full
+storm extent. powell.json / powell_kd.json peak winds unchanged (those already
+sampled the PDE to 250 km). No JS change needed.
+
 ## Review
 _(to be filled in as work proceeds)_

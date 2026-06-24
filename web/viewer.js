@@ -507,26 +507,28 @@ function wireControls() {
 async function init() {
   wireControls();
   try {
-    state.grid = await (await fetch("../outputs/web/grid.json")).json();
-    state.inputs = await (await fetch("../outputs/web/inputs.json")).json();
-    try { state.roughness = await (await fetch("../outputs/web/roughness.json")).json(); }
+    // pipeline-regenerated data: never serve a stale cached copy
+    const NC = { cache: "no-store" };
+    state.grid = await (await fetch("../outputs/web/grid.json", NC)).json();
+    state.inputs = await (await fetch("../outputs/web/inputs.json", NC)).json();
+    try { state.roughness = await (await fetch("../outputs/web/roughness.json", NC)).json(); }
     catch (e) { state.roughness = null; }
-    try { state.powellKd = await (await fetch("../outputs/web/powell_kd.json")).json(); }
+    try { state.powellKd = await (await fetch("../outputs/web/powell_kd.json", NC)).json(); }
     catch (e) { state.powellKd = null; }   // generated after the UA run
-    try { state.powellField = await (await fetch("../outputs/web/powell_field.json")).json(); }
+    try { state.powellField = await (await fetch("../outputs/web/powell_field.json", NC)).json(); }
     catch (e) { state.powellField = null; }  // generated after the UA run
-    try { state.powellUa = await (await fetch("../outputs/web/powell_ua.json")).json(); }
+    try { state.powellUa = await (await fetch("../outputs/web/powell_ua.json", NC)).json(); }
     catch (e) { state.powellUa = null; }     // faithful EPR (Option 1)
-    try { state.vuln = await (await fetch("../outputs/web/vulnerability.json")).json(); }
+    try { state.vuln = await (await fetch("../outputs/web/vulnerability.json", NC)).json(); }
     catch (e) { state.vuln = null; }         // MDR vs wind (loss)
-    try { state.metamodels = await (await fetch("../outputs/web/metamodels.json")).json(); }
+    try { state.metamodels = await (await fetch("../outputs/web/metamodels.json", NC)).json(); }
     catch (e) { state.metamodels = null; }   // Phase B: precomputed GPR + NN (default config)
     buildMap();
     setupHover();
     setupAnalysis();
     // powell.json may still be precomputing; load if present
     try {
-      state.powell = await (await fetch("../outputs/web/powell.json")).json();
+      state.powell = await (await fetch("../outputs/web/powell.json", NC)).json();
     } catch (e) { state.powell = null; }
     updateField();
   } catch (err) {

@@ -110,7 +110,9 @@ def peak_winds(rec, ew, ns, hours_t, device):
 
 
 # ---- Kaplan-DeMaria intensity schedule + storm-relative field (post-UA run) --
-FIELD_HALF_KM, FIELD_N = 90.0, 81
+# Field spans +/-250 km (the PDE solver's rmax_km) so the popup wind-vs-time plot
+# decays smoothly to 0 instead of clipping at a still-strong ~66-69 mph edge.
+FIELD_HALF_KM, FIELD_N = 250.0, 81
 
 
 def build_track_land(grid):

@@ -66,10 +66,15 @@ function openWindfieldPopup(idx) {
 function powellTimeSeries(field, pt, rec, land, idx) {
   const { Z, n, halfKm } = field;
   const step = (2 * halfKm) / (n - 1);
+  // bilinear interpolation over the 4 surrounding cells (smooth vs nearest-cell)
   const sample = (xkm, ykm) => {
-    const c = Math.round((xkm + halfKm) / step), r = Math.round((ykm + halfKm) / step);
-    if (c < 0 || c >= n || r < 0 || r >= n) return 0;
-    return Z[r * n + c];
+    const fc = (xkm + halfKm) / step, fr = (ykm + halfKm) / step;
+    if (fc < 0 || fc > n - 1 || fr < 0 || fr > n - 1) return 0;
+    const c0 = Math.min(Math.floor(fc), n - 2), r0 = Math.min(Math.floor(fr), n - 2);
+    const tx = fc - c0, ty = fr - r0;
+    const z00 = Z[r0 * n + c0], z01 = Z[r0 * n + c0 + 1];
+    const z10 = Z[(r0 + 1) * n + c0], z11 = Z[(r0 + 1) * n + c0 + 1];
+    return (z00 * (1 - tx) + z01 * tx) * (1 - ty) + (z10 * (1 - tx) + z11 * tx) * ty;
   };
   const nT = 121, dt = 0.1;
   const t = [], w = [], rx = [], ry = []; let imax = 0;
