@@ -354,14 +354,16 @@ disabled for the precomputed Powell model), the three-way land-effect selector, 
 points/filled-contour display toggle,
 light and dark themes (Figure~\ref{fig:light}), and nearest-point hover (peak
 wind, loss, coordinates, land/water, place name, and the active input
-parameters). Beneath the input-vector slider, a \textbf{Mean} toggle recolours
-the grid by the per-vertex wind averaged over all 100 input vectors (for the
-current model, category, and land effect); the viewer \emph{opens} in this mean
-view (the slider disabled), and toggling \textbf{Mean} off re-enables the slider
-to step through individual input vectors. \textbf{Right-clicking} a vertex
-exports a per-point loss-cost CSV for the current model/category/land-effect:
-$100$ rows (one per input vector) by $8$ columns---the six Form S-6 inputs (CP,
-$R_{\max}$, VT, WSP, CF, FFP) plus $\%\mathrm{LC}(i,x,y)=\mathrm{LC}(i,x,y)/\$100{,}000$
+parameters). Beneath the input-vector slider, mutually-exclusive \textbf{Mean} and
+\textbf{Max} toggles recolour the grid by, respectively, the per-vertex wind
+\emph{averaged} or \emph{maximised} over all 100 input vectors (for the current
+model, category, and land effect); the latter is a worst-case envelope. The viewer
+\emph{opens} in the mean view (the slider disabled), and clearing both toggles
+re-enables the slider to step through individual input vectors. \textbf{Right-clicking}
+a vertex exports a per-point loss-cost CSV for the current model/category/land-effect:
+$100$ rows (one per input vector) by $9$ columns---the six Form S-6 inputs (CP,
+$R_{\max}$, VT, WSP, CF, FFP), the peak wind at that vertex ($\mathrm{MaxWind\_mph}$),
+and $\%\mathrm{LC}(i,x,y)=\mathrm{LC}(i,x,y)/\$100{,}000$
 (the loss cost at that vertex) and $\%\mathrm{TLC}(i)=\mathrm{TLC}(i)/(\text{total
 exposure})$, where $\mathrm{TLC}(i)=\sum_x\sum_y \mathrm{LC}(i,x,y)$ over all land
 vertices. \textbf{Left-clicking} a vertex opens a floating windfield popup

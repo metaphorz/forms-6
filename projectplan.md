@@ -428,5 +428,23 @@ Kendall West, Key Biscayne, Boynton Beach).
 - Persist POIs in `localStorage` (survive reload) vs session-only? Plan assumes
   **localStorage + a reset link**. Say the word if you'd rather they reset each load.
 
+## Max button + MaxWind CSV column (2026-06-25) — DONE
+Added a **Max** aggregation toggle to the right of **Mean**, and a 9th column to
+the right-click per-point CSV.
+- `web/viewer.js`: `state.maxMode`; `computeMaxWind()` (per-vertex max — worst-case
+  envelope over the 100 vectors, mirroring `computeMeanWind`); `aggLabel()` helper;
+  `computeWind()`/`pointInfoHTML`/info-tag now mean/max-aware; `setAggMode()` makes
+  Mean and Max mutually exclusive (either disables the vector slider; clearing both
+  re-enables it). Default unchanged (Mean on).
+- `index.html`: `#btnMax` next to `#btnMean`.
+- Right-click CSV now 9 cols: `…,FFP,MaxWind_mph,%LC,%TLC` — `MaxWind_mph` = peak
+  wind at the clicked vertex for input vector i (the driver of `%LC`; distinct from
+  the VT input, which is the storm's forward speed).
+- Tests: new `tests/auto/test_mean_max_buttons.py` (Mean default, Max exclusive,
+  envelope peak ≥ mean peak, slider re-enable, Holland live max) replaces the
+  obsolete `test_mean_csv_buttons.py`; `test_gridpoint_csv.py` updated to 9 cols.
+  Both **PASS**, no console errors.
+- Docs: `docs/FormS6.tex` interface paragraph (Mean/Max + 9-col CSV); rebuilt PDF.
+
 ## Review
 _(to be filled in as work proceeds)_

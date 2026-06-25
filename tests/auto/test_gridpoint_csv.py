@@ -73,12 +73,13 @@ try:
     lines = [l for l in csv_text.strip().split("\n") if l]
     header = lines[0].split(",")
     print("header:", header)
-    assert header == ["CP", "Rmax", "VT", "WSP", "CF", "FFP", "%LC", "%TLC"], header
+    assert header == ["CP", "Rmax", "VT", "WSP", "CF", "FFP",
+                      "MaxWind_mph", "%LC", "%TLC"], header
     data = lines[1:]
     assert len(data) == 100, f"expected 100 data rows, got {len(data)}"
     for row in data:
         cells = row.split(",")
-        assert len(cells) == 8, f"row has {len(cells)} cols: {row}"
+        assert len(cells) == 9, f"row has {len(cells)} cols: {row}"
     print("sample row 1:", data[0])
     print("sample row 100:", data[-1])
 
@@ -87,6 +88,6 @@ try:
               if e["level"] == "SEVERE" and "favicon.ico" not in e["message"]]
     assert not errors, f"console errors: {errors}"
 
-    print("PASS: button removed, 8x100 CSV generated, no console errors.")
+    print("PASS: button removed, 9x100 CSV generated, no console errors.")
 finally:
     driver.quit()
