@@ -77,6 +77,12 @@ def apply(driver, controls):
 
 
 def main():
+    # optional name filter: `capture_figures.py analysis_src analysis_epr` regenerates
+    # only those figures (else all). Lets a small change refresh just its figures.
+    import sys
+    wanted = set(sys.argv[1:])
+    figures = [f for f in FIGURES if not wanted or f[0] in wanted]
+
     opts = Options()
     opts.add_argument("--headless=new")
     opts.add_argument("--window-size=1500,950")
@@ -84,7 +90,7 @@ def main():
     opts.add_argument("--hide-scrollbars")
     drv = webdriver.Chrome(options=opts)
     try:
-        for name, controls, sel in FIGURES:
+        for name, controls, sel in figures:
             drv.get(URL)
             WebDriverWait(drv, 20).until(
                 lambda d: "Loading" not in d.find_element(By.ID, "info").text)
@@ -108,7 +114,7 @@ def main():
             print(f"  saved {out.name} ({out.stat().st_size/1024:.0f} KB)")
     finally:
         drv.quit()
-    print(f"Done. {len(FIGURES)} figures in {FIG}")
+    print(f"Done. {len(figures)} figures in {FIG}")
 
 
 if __name__ == "__main__":

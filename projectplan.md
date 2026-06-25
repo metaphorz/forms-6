@@ -446,5 +446,20 @@ the right-click per-point CSV.
   Both **PASS**, no console errors.
 - Docs: `docs/FormS6.tex` interface paragraph (Mean/Max + 9-col CSV); rebuilt PDF.
 
+## Axis titles on all analysis plots (2026-06-25) — DONE
+The analysis charts had tick numbers but no axis titles. Added them:
+- `web/analysis.js` `drawChart` (SRC/EPR): rotated y-title ("SRC (standardized
+  regression coeff.)" / "EPR (% of output variance)") + x-title "Hurricane
+  category" (margins widened to fit).
+- `drawCDF`: y-title "cumulative probability F(x)" + x-title "%TLC (loss cost,
+  % of $68.2M exposure)".
+- `drawProfiler`/`drawCompare` small-multiples: a shared `.prof-axis` caption
+  ("Each panel — y: <metric> · x: the named input over its range"); each cell keeps
+  its variable name as the x label. `web/style.css`: `.prof-axis`.
+- Windfield popup plots already carried axis labels (isotach: km E / km N;
+  time series: "wind (mph) vs time" + hour ticks) — left as-is.
+- `docs/capture_figures.py`: added an optional name filter so a change can refresh
+  just its figures. Regenerated analysis_src/epr/profiler/tlc_cdf/compare; rebuilt PDF.
+
 ## Review
 _(to be filled in as work proceeds)_

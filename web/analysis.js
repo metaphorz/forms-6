@@ -391,7 +391,7 @@ function drawChart(mode) {
   if (isEPR) { vmin = 0; }
   const pad = (vmax - vmin) * 0.1 || 1; vmax += pad; vmin -= (isEPR ? 0 : pad);
 
-  const W = 440, H = 300, mL = 48, mR = 12, mT = 14, mB = 30;
+  const W = 440, H = 312, mL = 58, mR = 12, mT = 14, mB = 44;
   const x = c => mL + (cats.indexOf(c) / (cats.length - 1)) * (W - mL - mR);
   const yv = v => mT + (1 - (v - vmin) / (vmax - vmin)) * (H - mT - mB);
 
@@ -406,6 +406,11 @@ function drawChart(mode) {
   }
   // x labels
   cats.forEach(c => svg += `<text x="${x(c)}" y="${H - mB + 16}" text-anchor="middle" class="ax">Cat ${c}</text>`);
+  // axis titles
+  const yTitle = isEPR ? "EPR (% of output variance)" : "SRC (standardized regression coeff.)";
+  const yMid = (mT + H - mB) / 2;
+  svg += `<text x="13" y="${yMid}" text-anchor="middle" transform="rotate(-90 13 ${yMid})" class="ax">${yTitle}</text>`;
+  svg += `<text x="${(mL + W - mR) / 2}" y="${H - 5}" text-anchor="middle" class="ax">Hurricane category</text>`;
   // lines + points
   for (const v of SA_VARS) {
     const pts = cats.map(c => `${x(c)},${yv(series[v][cats.indexOf(c)])}`).join(" ");
@@ -474,6 +479,8 @@ function buildProfilerDOM() {
   });
   const cvTxt = mm.cv != null ? ` cv=${mm.cv.toFixed(2)}` : "";
   p.body.innerHTML =
+    `<div class="prof-axis">Each panel — <b>y</b>: ${metricTxt} &nbsp;·&nbsp; ` +
+    `<b>x</b>: the named input over its range (dashed line = reference value)</div>` +
     `<div class="prof-grid"></div>` +
     `<div class="prof-sliders">${sliders}</div>` +
     `<p class="note">${METAMODEL_LABEL[mm.type]} · ${model} · Cat ${catN} · Y = ${metricTxt} · ` +
@@ -541,7 +548,7 @@ function drawCDF() {
   }
   const sorted = vals.slice().sort((a, b) => a - b), n = sorted.length;
   const xlo = sorted[0], xhi = sorted[n - 1], xspan = (xhi - xlo) || 1;
-  const W = 440, H = 280, mL = 44, mR = 12, mT = 12, mB = 34;
+  const W = 440, H = 294, mL = 54, mR = 12, mT = 12, mB = 48;
   const xpix = x => mL + ((x - xlo) / xspan) * (W - mL - mR);
   const ypix = q => mT + (1 - q) * (H - mT - mB);
   let path = `M ${xpix(xlo).toFixed(1)} ${ypix(0).toFixed(1)}`;
@@ -562,6 +569,10 @@ function drawCDF() {
   svg += `<line x1="${mL}" y1="${ypix(0)}" x2="${W - mR}" y2="${ypix(0)}" stroke="#64748b"/>`;
   svg += `<line x1="${mL}" y1="${mT}" x2="${mL}" y2="${H - mB}" stroke="#64748b"/>`;
   svg += `<path d="${path}" fill="none" stroke="#2563eb" stroke-width="2"/>`;
+  // axis titles
+  const yMid = (mT + H - mB) / 2;
+  svg += `<text x="13" y="${yMid}" text-anchor="middle" transform="rotate(-90 13 ${yMid})" class="ax">cumulative probability F(x)</text>`;
+  svg += `<text x="${(mL + W - mR) / 2}" y="${H - 6}" text-anchor="middle" class="ax">%TLC (loss cost, % of $68.2M exposure)</text>`;
   svg += `</svg>`;
   const mu = mean(sorted), md = sorted[Math.floor(n / 2)];
   p.body.innerHTML = svg +
@@ -622,6 +633,8 @@ function drawCompare() {
     `<td>${mms[t].r2.toFixed(3)}</td><td>${mms[t].cv != null ? mms[t].cv.toFixed(3) : "—"}</td></tr>`).join("");
   const metricTxt = responseVar() === "tlc" ? "%TLC" : "mean peak wind (mph)";
   p.body.innerHTML =
+    `<div class="prof-axis">Each panel — <b>y</b>: ${metricTxt} &nbsp;·&nbsp; ` +
+    `<b>x</b>: the named input over its range</div>` +
     `<div class="prof-grid">${gridHtml}</div>` +
     `<div class="legend2">${legend}</div>` +
     `<table class="cmp-tbl"><tr><th>metamodel</th><th>R²</th><th>5-fold CV R²</th></tr>${rows}</table>` +
