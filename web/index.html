@@ -34,6 +34,15 @@
     </section>
 
     <section>
+      <h2>Land model</h2>
+      <select id="landEffect">
+        <option value="none">None (marine)</option>
+        <option value="roughness" selected>Surface roughness (terrain)</option>
+        <option value="kd">Kaplan&ndash;DeMaria decay</option>
+      </select>
+    </section>
+
+    <section>
       <h2>Damage model</h2>
       <select id="damageModel">
         <option value="vickery" selected>Vickery&ndash;ARA (HAZUS)</option>
@@ -78,15 +87,6 @@
       </label>
       <div id="bparams"></div>
       <p id="bnote" class="bnote">Applies to Holland / Willoughby only — Powell is precomputed.</p>
-    </section>
-
-    <section>
-      <h2>Land effect</h2>
-      <select id="landEffect">
-        <option value="none">None (marine)</option>
-        <option value="roughness" selected>Surface roughness (terrain)</option>
-        <option value="kd">Kaplan&ndash;DeMaria decay</option>
-      </select>
     </section>
 
     <section>
