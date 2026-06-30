@@ -48,6 +48,9 @@ FIGURES = [
     ("analysis_matrix_point", {"model": "powell", "category": "5", "_btn": "btnProf",
                         "_js": "document.getElementById('model').value='holland';"
                                "document.getElementById('model').dispatchEvent(new Event('change'));"
+                               # single-point live sim is unavailable while K&D decay is on
+                               "document.getElementById('landDecay').checked=false;"
+                               "document.getElementById('landDecay').dispatchEvent(new Event('change'));"
                                "document.getElementById('response').value='tlc';"
                                "document.getElementById('response').dispatchEvent(new Event('change'));"
                                "profilerState.scale='point';profilerState.view='matrix';"
