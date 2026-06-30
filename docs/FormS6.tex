@@ -97,9 +97,14 @@ Three wind-field models are provided, each evaluated at all 840 vertices.
 \textbf{Powell} is an iterative boundary-layer PDE (slab) solver;
 \textbf{Holland} is the closed-form gradient-wind profile; \textbf{Willoughby}
 is a piecewise power-law profile anchored to the Holland $V_{\max}$. All three
-include translation asymmetry from the storm motion. Powell is precomputed in
-Python (PyTorch/MPS, $\sim$2.3\,s per solve); Holland and Willoughby are
-closed-form and computed live in the browser.
+include translation asymmetry from the storm motion. All three footprint
+windfields are \textbf{precomputed} so switching models is an instant lookup:
+Powell via the Python PDE solver (\texttt{windfield\_grid.py}, PyTorch/MPS,
+$\sim$2.3\,s per solve), and Holland/Willoughby by dumping the same closed-form
+field code the viewer uses (\texttt{precompute\_live.py}), which keeps the
+precomputed values identical to the live physics. The closed-form Holland and
+Willoughby code is retained for the single-point profiler and the pop-up isotach,
+which evaluate one vertex at a time.
 
 Per-vector inputs come from the \texttt{SA all Variables} worksheet: central
 pressure CP, radius of maximum wind Rmax, translation speed VT, wind-field shape

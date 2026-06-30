@@ -233,26 +233,17 @@ function applyRoughness(wind) {
   return Array.from(wind, (w, i) => w * f[i]);
 }
 
+// All three windfields are precomputed (Powell via windfield_grid.py; Holland &
+// Willoughby via precompute_live.py), so this is a fast lookup: pick the marine or
+// K&D-decayed store for the model, then apply roughness on top if ticked. The live
+// Holland/Willoughby path remains only for the single-point profiler/popup.
 function computeWindFor(model, cat, vIdx) {
   const { rough, decay } = landState();
-  const rec = state.inputs ? state.inputs[cat][vIdx] : null;
-
-  let wind;
-  if (model === "powell") {
-    if (decay) {
-      if (!state.powellKd || !state.powellKd[cat]) return "kd-pending";
-      wind = state.powellKd[cat][vIdx];
-    } else {
-      if (!state.powell || !state.powell[cat]) return null;
-      wind = state.powell[cat][vIdx];
-    }
-  } else {
-    // live Holland / Willoughby
-    if (!rec) return null;
-    const B = quantileToB(rec.WSP);
-    wind = decay ? computeLiveWindKD(model, rec, B, state.grid.points)
-                 : computeLiveWind(model, rec, B, state.grid.points);
-  }
+  const marineStore = { powell: state.powell, holland: state.holland, willoughby: state.willoughby }[model];
+  const kdStore = { powell: state.powellKd, holland: state.hollandKd, willoughby: state.willoughbyKd }[model];
+  const store = decay ? kdStore : marineStore;
+  if (!store || !store[cat]) return decay ? "kd-pending" : null;
+  const wind = store[cat][vIdx];
   return rough ? applyRoughness(wind) : wind;
 }
 
@@ -264,17 +255,13 @@ function computeWind() {
 }
 
 // signature of everything that affects the peak-wind array. Toggling display
-// (points<->contour), colorBy, layers, theme etc. does NOT change it, so we can
-// reuse the cached field instead of recomputing (live Holland/Willoughby Mean/Max
-// over 100 vectors x 2161 steps is ~10s — far too slow to repeat per toggle).
+// (points<->contour), colorBy, layers, theme, B distribution etc. does NOT change
+// it (all footprint windfields are precomputed), so we reuse the cached field.
 function windCacheKey() {
   const { model, cat, vIdx } = currentSelection();
   const agg = state.meanMode ? "mean" : state.maxMode ? "max" : "v" + vIdx;
   const { rough, decay } = landState();
-  const bdist = document.getElementById("bdist").value;
-  let bp = "";
-  document.querySelectorAll("#bparams input").forEach(i => { bp += i.dataset.key + "=" + i.value + ";"; });
-  return [model, cat, agg, "r" + rough + "d" + decay, bdist, bp].join("|");
+  return [model, cat, agg, "r" + rough + "d" + decay].join("|");
 }
 
 // computeWind() with memoization on windCacheKey(); only valid arrays are cached
@@ -725,6 +712,14 @@ async function init() {
     try {
       state.powell = await (await fetch("../outputs/web/powell.json", NC)).json();
     } catch (e) { state.powell = null; }
+    // Holland/Willoughby are precomputed too (pipeline/precompute_live.py) so model
+    // switches are instant lookups instead of a ~13s live recompute.
+    for (const m of ["holland", "willoughby"]) {
+      try { state[m] = await (await fetch(`../outputs/web/${m}.json`, NC)).json(); }
+      catch (e) { state[m] = null; }
+      try { state[m + "Kd"] = await (await fetch(`../outputs/web/${m}_kd.json`, NC)).json(); }
+      catch (e) { state[m + "Kd"] = null; }
+    }
     updateField();
   } catch (err) {
     document.getElementById("info").textContent = "Failed to load data: " + err;
