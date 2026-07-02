@@ -669,6 +669,53 @@ _(to be filled in as work proceeds)_
 
 ---
 
+# Integrated Kinetic Energy (IKE) at a grid cell (meteorologist point 3, 2026-07-02)
+
+**Ask:** IKE (TJ) as an integrated per-cell quantity — accumulate ½ρV² every
+timestep the wind is above TS force (~40 mph); ties to location-level loss.
+
+**Physics note:** textbook IKE (Powell & Reinhold 2007) is a *spatial* integral of
+½ρV² over the area where V≥34 kt, in a 1-m surface layer (TJ, whole-storm snapshot).
+The meteorologist's version is a *temporal* integral at one cell → different units:
+time-integrated is **TJ·h**, peak instantaneous is **TJ**. Per 3-mi cell ≈ 0.01–0.1
+TJ·h / 0.01–0.05 TJ (a cell is a tiny slice of the 10–200 TJ whole storm). It's the
+physical sibling of the `dosage` metric (full ½ρV² vs excess wind), reusing
+`pointTimeSeries`. Cell = 3 mi × 3 mi (A≈2.331e7 m²), ρ=1.15, h=1 m, V0=40 mph.
+
+**Scope chosen:** BOTH metrics (integrated TJ·h + peak TJ) as single-point Response
+options, AND a single-storm IKE map colour mode.
+
+### Plan
+- [x] `ikeMetrics(ts)` → {integ TJ·h, peak TJ}; constants (A_cell, ρ, h, V0).
+- [x] Response options `ike` / `ikepeak`; `pointResponse` dispatch; renamed
+      `isDurationResp`→`isPointOnlyResp` (+ ike/ikepeak) so footprint gating +
+      RSM scaffold + labels cover them.
+- [x] IKE map: `colorBy=ike` (single-storm integrated TJ·h); `computePointIKE(model)`
+      (682 live time series for the current vector; live models, decay off); viridis
+      `ikeColor` + dynamic legend + info + contour; cache by model|cat|vIdx|rough.
+- [x] Selenium test (`test_ike.py`); docs paragraph + figure + Powell–Reinhold cite.
+
+### Review
+- **Response metrics** (`web/analysis.js`): `ikeMetrics(ts)` returns integrated
+  (TJ·h) + peak (TJ) IKE from the same `pointTimeSeries` as dwell/dosage; two new
+  Response options wired through `pointResponse` + labels. `isDurationResp` renamed
+  `isPointOnlyResp` (now dwell/dosage/ike/ikepeak) so all four share the footprint
+  gating + RSM scaffold.
+- **IKE map** (`web/viewer.js`): `colorBy=ike` → `computePointIKE()` builds the
+  682-cell integrated-IKE field for the slider's single storm via live time series
+  (Holland/Willoughby, decay off; Powell/decay → "live-only" note), cached by
+  model|cat|vIdx|rough; viridis ramp, dynamic energy-unit legend, info, contour.
+- **Verified** (`tests/auto/test_ike.py`): integrated IKE >0, falls with VT
+  (0.116→0.074 TJ·h) and with CP (deeper storm = more energy); peak IKE tracks
+  intensity; map computes in ~140 ms (no freeze), Powell→live-only; no console
+  errors. Figure screenshot-checked (`docs/figures/ike_map.png`).
+- **Units honesty:** integrated = TJ·h (energy×time), peak = TJ; documented that
+  this is a temporal per-cell adaptation of the spatial Powell–Reinhold IKE, cited.
+- **Docs** (`docs/FormS6.tex`, +figure +bib entry, rebuilt 22 pp clean).
+- Regression: duration, point-response, point-ep-aal, financial, profiler-cdf green.
+
+---
+
 # Per-point EP curve + AAL heat-map (meteorologist point 2, 2026-07-02)
 
 **Ask:** the Loss EP panel is a domain aggregate; also show it for an individual

@@ -80,11 +80,35 @@ function durationMetrics(ts) {
   return { hours, dosage };
 }
 
-// duration responses live only at single-point scale — the footprint stores hold
+// Integrated Kinetic Energy at ONE grid cell (Powell & Reinhold 2007 energy
+// density ½ρV², but integrated in TIME at a fixed cell rather than over area).
+// A 1-m-deep surface layer over the 3-mi×3-mi cell holds instantaneous energy
+// E(t)=½ρV(t)²·A_cell·h (J) whenever V≥TS force (≈40 mph). Reported:
+//   integ = ∫ E dt   over V≥V0  (TJ·h — energy accumulated over the passage)
+//   peak  = max E     over V≥V0  (TJ   — snapshot; behaves like peak wind)
+// V0 = DAMAGE_THRESHOLD_MPH (40 mph doubles as tropical-storm force here).
+const IKE_CELL_M = 3 * PHYS.MILE_M;                 // 3-mi cell side (m)
+const IKE_AREA = IKE_CELL_M * IKE_CELL_M;           // cell area (m²)
+const IKE_DEPTH_M = 1;                              // surface-layer depth (m)
+function ikeMetrics(ts) {
+  const dt = PHYS.T_DT;                             // hours per sample
+  const k = 0.5 * PHYS.RHO * IKE_AREA * IKE_DEPTH_M; // J per (m/s)² in this cell
+  let integ = 0, peak = 0;
+  for (const vmph of ts.w) {
+    if (vmph < DAMAGE_THRESHOLD_MPH) continue;
+    const vms = vmph / PHYS.MS_TO_MPH;
+    const e = k * vms * vms;                        // instantaneous IKE (J)
+    integ += e * dt;                                // J·h
+    if (e > peak) peak = e;                         // J
+  }
+  return { integ: integ / 1e12, peak: peak / 1e12 };  // TJ·h, TJ
+}
+
+// these responses live only at single-point scale — the footprint stores hold
 // precomputed peak wind per vertex, with no time series to integrate.
-function isDurationResp() {
+function isPointOnlyResp() {
   const r = responseVar();
-  return r === "dwell" || r === "dosage";
+  return r === "dwell" || r === "dosage" || r === "ike" || r === "ikepeak";
 }
 
 // %TLC(i) = TLC(i)/total exposure as percent = 100 * mean MDR over land points
@@ -301,7 +325,7 @@ function buildMetamodel(model, cat, type) {
   // duration responses have no precomputed (GPR/MLP) metamodel and are single-point
   // only; the live RSM fit still yields the input-stat scaffold the point-scale
   // profiler needs (its footprint surface is gated off below, never shown).
-  if (isDurationResp()) type = "rsm";
+  if (isPointOnlyResp()) type = "rsm";
   if (type === "rsm") {
     const fit = fitRSM(model, cat);
     if (!fit) return null;
@@ -395,9 +419,9 @@ function renderPanel(mode) {
 function drawChart(mode) {
   const p = panels[mode];
   if (!p || p.el.style.display === "none") return;
-  if (isDurationResp()) {                    // footprint SRC/EPR has no time series
+  if (isPointOnlyResp()) {                    // footprint SRC/EPR has no time series
     p.title.textContent = mode === "epr" ? "Uncertainty — EPR" : "Sensitivity — SRC";
-    p.body.innerHTML = "<p class='note'>Duration metrics (dwell / dosage) are " +
+    p.body.innerHTML = "<p class='note'>Location-level metrics (dwell / dosage / IKE) are " +
       "location-level. Open the Interaction Profiler, set Scale = Single point, and " +
       "pick a vertex to see how dwell/dosage responds to each storm parameter. " +
       "Footprint-wide SRC/EPR use precomputed peak-wind fields, which carry no " +
@@ -528,6 +552,10 @@ function pointResponse(model, rec, pt) {
     const d = durationMetrics(ts);
     return resp === "dwell" ? d.hours : d.dosage;
   }
+  if (resp === "ike" || resp === "ikepeak") {                  // integrated kinetic energy
+    const e = ikeMetrics(ts);
+    return resp === "ike" ? e.integ : e.peak;
+  }
   let peak = 0; for (const w of ts.w) if (w > peak) peak = w;
   if (resp === "tlc") { const m = mdrAt(peak); return m == null ? 0 : m * 100; }
   return peak;
@@ -538,8 +566,8 @@ function pointResponse(model, rec, pt) {
 function profilerPredictor() {
   const mm = profilerState.mm, model = document.getElementById("model").value;
   if (profilerState.scale !== "point") {
-    if (isDurationResp())
-      return { available: false, why: "Duration metrics (dwell / dosage) are " +
+    if (isPointOnlyResp())
+      return { available: false, why: "Location-level metrics (dwell / dosage / IKE) are " +
         "location-level — set Scale to Single point and pick one of the vertices. " +
         "Footprint fields are precomputed peak wind, with no time series to integrate." };
     return { available: true, predict: mm.predict, ymin: mm.ymin, ymax: mm.ymax };
@@ -582,6 +610,8 @@ function buildProfilerDOM() {
     responseVar() === "tlc" ? (profilerState.scale === "point" ? "%LC at point" : "%TLC") :
     responseVar() === "dwell" ? "hours V≥40 mph" :
     responseVar() === "dosage" ? "wind dosage (mph·h)" :
+    responseVar() === "ike" ? "IKE (TJ·h)" :
+    responseVar() === "ikepeak" ? "peak IKE (TJ)" :
     "peak wind (mph)";
   const view = profilerState.view, scale = profilerState.scale;
   profilerState.pred = profilerPredictor();
@@ -814,8 +844,8 @@ function drawCompare() {
   const cat = "cat" + document.getElementById("category").value;
   const catN = document.getElementById("category").value;
   p.title.textContent = "Compare metamodels — Linear / GPR / NN";
-  if (isDurationResp()) {                     // footprint metamodels are peak-based
-    p.body.innerHTML = "<p class='note'>Duration metrics (dwell / dosage) are " +
+  if (isPointOnlyResp()) {                     // footprint metamodels are peak-based
+    p.body.innerHTML = "<p class='note'>Location-level metrics (dwell / dosage / IKE) are " +
       "location-level and have no footprint metamodel. Use the Interaction Profiler " +
       "at Single-point scale.</p>";
     return;

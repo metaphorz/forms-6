@@ -471,6 +471,46 @@ precomputed peak wind per vertex with no time series to integrate, so at footpri
 scale (and in the SRC, EPR, and metamodel-comparison panels) they show a short
 ``location-level'' note.
 
+\paragraph{Integrated Kinetic Energy (IKE) at a grid cell.}
+A third review comment proposed Integrated Kinetic Energy as the natural integrated
+hazard to tie to location-level loss. The Powell--Reinhold \cite{powellreinhold2007}
+IKE is a \emph{spatial} integral of the surface kinetic-energy density
+$\tfrac12\rho V^2$ over the area where $V\ge$ tropical-storm force ($\approx$34\,kt),
+in a 1-m surface layer, reported for the whole storm in terajoules. Here we adapt it
+to a \emph{temporal} integral at one fixed cell: a $1$-m-deep column over the
+3\,mi\,$\times$\,3\,mi cell ($A\!\approx\!2.33\times10^7$\,m$^2$) holds instantaneous
+energy $E(t)=\tfrac12\rho V(t)^2 A\,h$ whenever $V\ge V_0=40$\,mph, and we accumulate
+it over the passage from the same per-cell time series $V(t)$ used above. Two
+responses are exposed:
+\[
+\text{IKE}_{\text{int}}=\!\!\int_{V\ge V_0}\!\!\!\! E(t)\,dt \ \ (\text{TJ}{\cdot}\text{h}),
+\qquad
+\text{IKE}_{\text{peak}}=\max_{V\ge V_0} E(t) \ \ (\text{TJ}).
+\]
+The dimensions differ deliberately: the time-integrated energy is
+terajoule-\emph{hours} (an accumulated exposure, the meteorologist's ``summed every
+timestep'' quantity), while the peak is a snapshot in terajoules. For a single cell
+the values run $\sim$$0.01$--$0.1$\,TJ$\cdot$h and $\sim$$0.01$--$0.05$\,TJ---a small
+slice of the $10$--$200$\,TJ whole-storm IKE. As an integrated quantity, $\text{IKE}_
+{\text{int}}$ behaves like the wind dosage (it falls as forward speed $V_T$ rises and
+grows with intensity), but weights the wind quadratically ($\tfrac12\rho V^2$) with
+physical energy units. A companion map colouring paints every land cell by
+$\text{IKE}_{\text{int}}$ for a \emph{single} chosen storm (682 live time series),
+revealing where the storm deposits the most energy (Figure~\ref{fig:ikemap}); like
+the point responses it needs a live model (Holland/Willoughby, decay off), since it
+integrates a live wind history rather than a stored peak.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{ike_map.png}
+\caption{Per-cell Integrated Kinetic Energy (IKE$_{\text{int}}$, TJ$\cdot$h) for a
+single Category~5 Holland storm, accumulated while $V\ge40$\,mph. Brighter (viridis
+yellow) cells accumulate more energy---concentrated along the track band where the
+strong winds dwell---fading to dark toward the off-track edges; cell-to-cell speckle
+reflects terrain roughness modulating the surface wind.}
+\label{fig:ikemap}
+\end{figure}
+
 \paragraph{Loss-cost distribution.}
 A companion panel plots the empirical CDF of $\%\text{TLC}(i)$ over the $100$
 vectors for the selected category (the ROA's Fig.~5 analogue), summarizing the
@@ -717,6 +757,10 @@ hurricane loss projection model: Atmospheric science component.
 \bibitem{powell1996} Powell, M.~D., Houston, S.~H., and Reinhold, T.~A. (1996).
 Hurricane Andrew's landfall in South Florida. Part~I: Standardizing the surface
 wind observations. \emph{Weather and Forecasting}, 11, 304--328.
+
+\bibitem{powellreinhold2007} Powell, M.~D., and Reinhold, T.~A. (2007).
+Tropical cyclone destructive potential by integrated kinetic energy.
+\emph{Bulletin of the American Meteorological Society}, 88(4), 513--526.
 
 \bibitem{vickery} Vickery, P.~J., Wadhera, D., Powell, M.~D., and Chen, Y. (2009).
 A hurricane boundary layer and wind field model for use in engineering applications.

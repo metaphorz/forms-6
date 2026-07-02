@@ -200,6 +200,51 @@ function aalColor(frac) {
   return c;
 }
 
+// ---- per-cell Integrated Kinetic Energy (IKE) field ----------------------
+// Integrated IKE (TJ·h) at every land vertex for ONE input vector (the slider's
+// selected storm), from live per-cell wind time series. Live models only
+// (Holland/Willoughby, decay off), matching the single-point Response. Cached by
+// model|cat|vIdx|rough so unrelated redraws don't recompute the 682 time series.
+function computePointIKE(model) {
+  if (model === "powell" || document.getElementById("landDecay").checked) return "live-only";
+  if (!state.inputs) return null;
+  const { cat, vIdx, rec } = currentSelection();
+  if (!rec) return null;
+  const rough = document.getElementById("landRoughness").checked && !!state.roughness;
+  const key = [model, cat, vIdx, "r" + rough].join("|");
+  if (state.ikeCache && state.ikeCache.key === key) return state.ikeCache.field;
+  const B = quantileToB(rec.WSP);
+  const pts = state.grid.points, N = pts.length;
+  const field = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    if (!pts[i].land) continue;
+    const opts = rough ? { factor: state.roughness.factors[i] } : {};
+    const ts = pointTimeSeries(model, rec, B, pts[i].ew, pts[i].ns, opts);
+    field[i] = ikeMetrics(ts).integ;                 // TJ·h
+  }
+  state.ikeCache = { key, field };
+  return field;
+}
+
+// IKE colour ramp on f = IKE/IKE_max (sequential viridis-ish, distinct from AAL).
+const IKE_STOPS = [
+  [0, "#3b4a5a"], [0.02, "#440154"], [0.10, "#3b528b"], [0.25, "#21908d"],
+  [0.45, "#5dc963"], [0.70, "#addc30"], [0.88, "#fde725"],
+];
+function ikeColor(frac) {
+  if (frac == null || isNaN(frac)) return "#2b2f36";
+  let c = IKE_STOPS[0][1];
+  for (const [thr, col] of IKE_STOPS) { if (frac >= thr) c = col; else break; }
+  return c;
+}
+// compact TJ·h formatter (per-cell integrated IKE runs ~0.001–0.2 TJ·h)
+function fmtTJh(v) {
+  if (v == null || isNaN(v)) return "–";
+  if (v >= 0.1) return `${v.toFixed(2)} TJ·h`;
+  if (v >= 1e-3) return `${(v * 1e3).toFixed(1)} GJ·h`;
+  return `${(v * 1e6).toFixed(0)} MJ·h`;
+}
+
 function renderLegend(mode) {
   const el = document.getElementById("legend");
   if (mode === "loss") {
@@ -214,6 +259,15 @@ function renderLegend(mode) {
           `<div class="lg"><span style="background:${col}"></span>&ge; ${fmtMoney(f * mx)}</div>`).join("") +
         `<div class="lg" style="margin-top:3px">max ${fmtMoney(mx)}/yr</div>`
       : `<div class="lg">AAL — pending</div>`;
+    return;
+  }
+  if (mode === "ike") {
+    const mx = state.ikeMax || 0;
+    el.innerHTML = mx > 0
+      ? IKE_STOPS.filter(([f]) => f > 0).map(([f, col]) =>
+          `<div class="lg"><span style="background:${col}"></span>&ge; ${fmtTJh(f * mx)}</div>`).join("") +
+        `<div class="lg" style="margin-top:3px">max ${fmtTJh(mx)}</div>`
+      : `<div class="lg">IKE — live models only</div>`;
     return;
   }
   if (mode === "landwater") {
@@ -579,6 +633,16 @@ function updateField() {
   if (aal) for (let i = 0; i < aal.length; i++) if (aal[i] > aalMax) aalMax = aal[i];
   state.aalMax = aalMax;
 
+  // per-cell IKE field (integrated TJ·h) for the slider's single storm; "live-only"
+  // when the model/decay can't run a live time series.
+  const ikeMode = colorBy === "ike";
+  let ike = ikeMode ? computePointIKE(model) : null;
+  const ikeLiveOnly = ike === "live-only";
+  if (typeof ike === "string") ike = null;
+  let ikeMax = 0;
+  if (ike) for (let i = 0; i < ike.length; i++) if (ike[i] > ikeMax) ikeMax = ike[i];
+  state.ikeMax = ikeMax;
+
   renderLegend(colorBy);
   updateVecRow();
 
@@ -596,12 +660,16 @@ function updateField() {
   const showGrid = document.getElementById("showGrid").checked;
   const display = document.getElementById("display").value;
   const lossMode = colorBy === "loss";
-  const contourMode = display === "contour" && ((needWind && !!wind) || (aalMode && !!aal));
+  const contourMode = display === "contour" &&
+    ((needWind && !!wind) || (aalMode && !!aal) || (ikeMode && !!ike));
 
-  // refresh contour overlay (wind bands, loss-MDR bands, or AAL $ bands)
+  // refresh contour overlay (wind bands, loss-MDR bands, AAL $ bands, or IKE bands)
   if (state.contour) { state.map.removeLayer(state.contour); state.contour = null; }
   if (contourMode) {
-    if (aalMode && aal && aalMax > 0) {
+    if (ikeMode && ike && ikeMax > 0) {
+      const thr = IKE_STOPS.map(s => s[0]).filter(t => t > 0).map(f => f * ikeMax);
+      state.contour = buildContourLayer(g, ike, thr, v => ikeColor(v / ikeMax)).addTo(state.map);
+    } else if (aalMode && aal && aalMax > 0) {
       const thr = AAL_STOPS.map(s => s[0]).filter(t => t > 0).map(f => f * aalMax);
       state.contour = buildContourLayer(g, aal, thr, v => aalColor(v / aalMax)).addTo(state.map);
     } else if (lossMode && state.vuln) {
@@ -629,6 +697,8 @@ function updateField() {
       if (p.land && sens && sens[i] >= 0) n++;
     } else if (aalMode) {
       if (aal && p.land) { aalTotal += aal[i]; n++; }
+    } else if (ikeMode) {
+      if (ike && p.land) n++;
     } else if (lossMode) {
       const mdr = w != null ? mdrAt(w) : null;
       if (mdr != null && p.land) { lossTotal += mdr * exposureAt(i); if (w > wmax) wmax = w; n++; }
@@ -649,6 +719,8 @@ function updateField() {
       fill = (p.land && sens && sens[i] >= 0) ? VAR_COLORS[SA_VARS[sens[i]]] : "#243244";
     } else if (aalMode) {
       fill = (p.land && aal && aalMax > 0) ? aalColor(aal[i] / aalMax) : "#243244";
+    } else if (ikeMode) {
+      fill = (p.land && ike && ikeMax > 0) ? ikeColor(ike[i] / ikeMax) : "#243244";
     } else if (lossMode) {
       const mdr = w != null ? mdrAt(w) : null;
       fill = p.land ? lossColor(mdr) : "#243244";   // loss only meaningful on land
@@ -671,6 +743,16 @@ function updateField() {
     info.textContent = "Powell Kaplan–DeMaria field: AAL precompute pending.";
   } else if (aalMode) {
     info.textContent = "AAL needs inputs + vulnerability curve loaded…";
+  } else if (ikeMode && ike) {
+    const v = document.getElementById("vector").value;
+    info.innerHTML = `${model.charAt(0).toUpperCase() + model.slice(1)} · ` +
+      `${currentSelection().cat.toUpperCase()} · IKE (integrated, 1 storm — vector ${v})` +
+      `<br>peak-cell IKE <b>${fmtTJh(state.ikeMax)}</b> over ${n} land pts` +
+      `<br><span class="note">∫½ρV² dt above 40 mph · single storm, not a 100-vector mean</span>`;
+  } else if (ikeMode && ikeLiveOnly) {
+    info.textContent = "IKE map needs a live model — switch to Holland/Willoughby and untick Kaplan–DeMaria decay.";
+  } else if (ikeMode) {
+    info.textContent = "IKE needs inputs loaded…";
   } else if (lossMode && wind && state.vuln) {
     const pct = lossTotal / totalExposure() * 100;
     info.innerHTML = `${tag}<br>Loss over ${n} land pts <b>${fmtMoney(lossTotal)}</b>` +
